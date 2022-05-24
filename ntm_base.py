@@ -11,7 +11,7 @@ from sklearn.neural_network import MLPClassifier
 
 def main():
     n_iter = 2000
-    for topic_number_ntm in 50, 100, 200, 300:
+    for topic_number_ntm in 50, 100, 200, 300, 400:
         for vocab_size_ntm in 10000, 20000:
             word_index_map, reformat_data = bag_of_word_reorganize(vocab_size_ntm)
             five_fold_data = five_fold_datasets(reformat_data)
