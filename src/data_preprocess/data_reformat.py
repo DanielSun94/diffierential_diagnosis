@@ -1,73 +1,51 @@
+# coding=utf-8
 import os
 import csv
-import re
 from itertools import islice
-
-
-
-parse_list = [
-    ['姓名', re.compile('\u59d3[\s\*\u0020]*\u540d[\uff1a:\n\t\s]+')],
-    ['性别', re.compile('\u6027[\*\s]*\u522b[\uff1a:\n\t\s]+')],
-    ['年龄', re.compile('\u5e74[\*\s]*\u9f84[\uff1a:\n\t\s]+'),
-     re.compile('\u51fa[\*\s]*\u751f[\*\s]*\u65e5[\*\s]*\u671f[\uff1a:\n\t\s]+')],
-    ['民族', re.compile('\u6c11[\*\s]*\u65cf[\uff1a:\n\t\s]+')],
-    ['职业', re.compile('\u804c[\*\s]*\u4e1a[\uff1a:\n\t\s]+')],
-    ['出生地', re.compile('\u51fa[\*\s]*\u751f[\*\s]*\u5730[\uff1a:\n\t\s]+')],
-    ['婚姻', re.compile('\u5a5a[\*\s]*\u59fb[\uff1a:\n\t\s]+'),
-     re.compile('\u5a5a[\*\s]*\u80b2[\*\s]*\u53f2[\uff1a:\n\t\s]+')],
-    ['宗教', re.compile('\u5b97[\*\s]*\u6559[\uff1a:\n\t\s]+')],
-    ['联系方式', re.compile('\u8054[\*\s]*\u7cfb[\*\s]*\u65b9[\*\s]*\u5f0f[\uff1a:\n\t\s]+')],
-    ['家庭地址', re.compile('\u5bb6[\*\s]*\u5ead[\*\s]*\u5730[\*\s]*\u5740[\uff1a:\n\t\s]+')],
-    ['入院时间', re.compile('\u5165[\*\s]*\u9662[\*\s]*\u65f6[\*\s]*\u95f4[\uff1a:\n\t\s]+'),
-     re.compile('\u5165[\*\s]*\u9662[\*\s]*\u65e5[\*\s]*\u671f[\uff1a:\n\t\s]+')],
-    ['记录时间', re.compile('\u8bb0[\*\s]*\u5f55[\*\s]*\u65f6[\*\s]*\u95f4[\uff1a:\n\t\s]+'),
-     re.compile('\u8bb0[\*\s]*\u5f55[\*\s]*\u65e5[\*\s]*\u671f[\uff1a:\n\t\s]+')],
-    ['身份证号', re.compile('\u8eab[\*\s]*\u4efd[\*\s]*\u8bc1[\*\s]*\u53f7[\uff1a:\n\t\s]+')],
-    ['病史陈述者', re.compile('\u75c5[\*\s]*\u53f2[\*\s]*\u9648[\*\s]*\u8ff0[\*\s]*\u8005[\uff1a:\n\t\s]+')],
-    ['主诉', re.compile('\u4e3b[\*\s]*\u8bc9[\uff1a:\n\t\s]+')],
-    ['现病史', re.compile('\u73b0[\*\s]*\u75c5[\*\s]*\u53f2[\uff1a:\n\t\s]+')],
-    ['既往史', re.compile('\u65e2[\*\s]*\u5f80[\*\s]*\u53f2[\uff1a:\n\t\s]+')],
-    ['个人史', re.compile('\u4e2a[\*\s]*\u4eba[\*\s]*\u53f2[\uff1a:\n\t\s]+')],
-    ['婚育史', re.compile('\u5a5a[\*\s]*\u80b2[\*\s]*\u53f2[\uff1a:\n\t\s]+')],
-    ['家族史', re.compile('\u5bb6[\*\s]*\u65cf[\*\s]*\u53f2[\uff1a:\n\t\s]+')],
-    ['月经史', re.compile('\u6708[\*\s]*\u7ecf[\*\s]*\u53f2[\uff1a:\n\t\s]+')],
-    ['体格检查', re.compile('\u4f53[\*\s]*\u683c[\*\s]*\u68c0[\*\s]*\u67e5')],
-    ['精神检查', re.compile('\u7cbe[\*\s]*\u795e[\*\s]*\u68c0[\*\s]*\u67e5[\uff1a:\n\t\s]+')],
-    ['谈话记录', re.compile('\u8c08[\*\s]*\u8bdd[\*\s]*\u8bb0[\*\s]*\u5f55[\uff1a:\n\t\s]+')],
-    ['辅助检查', re.compile('\u8f85[\*\s]*\u52a9[\*\s]*\u68c0[\*\s]*\u67e5[\uff1a:\n\t\s]+')],
-    ['诊断', re.compile('\u5165[\*\s]*\u9662[\*\s]*\u8bca[\*\s]*\u65ad[\uff1a:\n\t\s]+'),
-     re.compile('\u8865[\*\s]*\u5145[\*\s]*\u8bca[\*\s]*\u65ad[\uff1a:\n\t\s]+'),
-     re.compile('\u521d[\*\s]*\u6b65[\*\s]*\u8bca[\*\s]*\u65ad[\uff1a:\n\t\s]+'),
-     re.compile('\u8bca[\*\s]*\u65ad[\uff1a:\n\t\s]+')],
-    ['父母近亲婚姻', re.compile('\u7236[\*\s]*\u6bcd[\*\s]*\u8fd1[\*\s]*\u4eb2[\*\s]*\u5a5a[\*\s]*\u59fb[\uff1a:\n\t\s]+')],
-    ['寄养', re.compile('\u521d\u6b65\u8bca\u65ad[\uff1a:\n\t\s]+')],
-    ['家系谱图', re.compile('\u5bb6[\*\s]*\u7cfb[\*\s]*\u8c31[\*\s]*\u56fe[\uff1a:\n\t\s]+')],
-    ['神经系统检查', re.compile('\u795e[\*\s]*\u7ecf[\*\s]*\u7cfb[\*\s]*\u7edf[\*\s]*\u68c0[\*\s]*\u67e5[\uff1a:\n\t\s]+'),
-     re.compile('\u795e[\*\s]*\u7ecf[\*\s]*\u4e13[\*\s]*\u79d1[\*\s]*\u60c5[\*\s]*\u51b5')],
-    ['医师签名', re.compile('\u533b[\*\s]*\u5e08[\*\s]*\u7b7e[\*\s]*\u540d[\uff1a:\n\t\s]+')],
-]
+from config import save_folder, data_file_template, emr_parse_file_path, integrate_file_name, \
+    reorganize_first_emr_path, semi_structure_admission_path, parse_list
 
 
 def main():
-    integrate_file_name = os.path.abspath('../../data/data_utf_8/integrate_data.csv')
-    admission_parse_file_path = os.path.abspath('../../data/data_utf_8/入院记录解析序列.csv')
-    emr_parse_file_path = os.path.abspath('../../data/data_utf_8/病程记录解析序列.csv')
-
-    semi_structure_admission_path = os.path.abspath('../../data/data_utf_8/半结构化入院记录.csv')
-    data_file_template = os.path.abspath('../../data/origin_data/{}/{}.csv')
-    save_folder = os.path.abspath('../../data/data_utf_8')
-    reorganize_first_emr_path = os.path.join(save_folder, 'first_emr_reorganize.csv')
-
-    re_save_data(data_file_template, save_folder)
-
+    re_save_data(data_file_template, save_folder, re_save=True)
     data = reorganize_data(integrate_file_name, data_file_template)
     # print('start first emr preprocessing')
-    # first_emr_record(emr_parse_file_path, data, reorganize_first_emr_path)
+    first_emr_record = first_emr_record_reorganize(emr_parse_file_path, data, reorganize_first_emr_path)
     # print('first emr preprocessing, accomplished')
-    print('start admission emr preprocessing')
+    # print('start admission emr preprocessing')
     admission_data_dict = admission_record_structurize(data)
-    print('admission emr preprocessing, accomplished')
-    print_admission_data_dict(admission_data_dict, semi_structure_admission_path)
+    # print('admission emr preprocessing, accomplished')
+    save_admission_data_dict(admission_data_dict, semi_structure_admission_path)
+
+    # reconstruct_data(admission_data_dict, first_emr_record)
+
+
+def reconstruct_data(admission_data_dict, first_emr_record_dict, admission_parse_list, first_emr_parse_list):
+    data = dict()
+    for key in admission_data_dict:
+        if key not in first_emr_record_dict:
+            # print('{} not in first emr record'.format(key))
+            continue
+        admission_str = reconstruct_str(admission_parse_list, admission_data_dict[key])
+        first_emr_str = reconstruct_str(first_emr_parse_list, first_emr_record_dict[key][1])
+        data[key] = first_emr_str + ' ; ' + admission_str, key.strip().split('_')[1]
+    return data
+
+
+def load_data(read_from_cache=True):
+    data = reorganize_data(integrate_file_name, data_file_template, read_from_cache=read_from_cache)
+    first_emr_record = first_emr_record_reorganize(emr_parse_file_path, data, reorganize_first_emr_path)
+    admission_data_dict = admission_record_structurize(data)
+    save_admission_data_dict(admission_data_dict, semi_structure_admission_path)
+    return admission_data_dict, first_emr_record
+
+
+def reconstruct_str(parse_order_list, info_dict):
+    return_str = ''
+    for item in parse_order_list:
+        if item in info_dict:
+            return_str = return_str + ' ' + item + ': ' + info_dict[item] + ';'
+    return return_str
 
 
 def read_emr_parse_file(file_path):
@@ -88,12 +66,12 @@ def read_emr_parse_file(file_path):
     return structure_1, structure_2
 
 
-def first_emr_record(emr_parse_file_path, full_data, reorganize_file_path):
+def first_emr_record_reorganize(file_path, full_data, reorganize_file_path):
     """
     EMR数据中，病程记录相对而言是结构化的非常好的，就目前而言看上去能够比较好的遵循
     """
 
-    structure_1, structure_2 = read_emr_parse_file(emr_parse_file_path)
+    structure_1, structure_2 = read_emr_parse_file(file_path)
     data = list()
     data_dict = dict()
     for line in full_data:
@@ -106,8 +84,8 @@ def first_emr_record(emr_parse_file_path, full_data, reorganize_file_path):
         if complete:
             assert patient_id+'_'+diagnosis not in data_dict
             data_dict[patient_id+'_'+diagnosis] = doc_type, structured_data, template_type
-        else:
-            print('incomplete error')
+        # else:
+        #     print('incomplete error')
 
     data_to_write = [['id', 'data_type', 'info_type', 'info content', 'template type']]
     for key in data_dict:
@@ -128,7 +106,7 @@ def _first_emr_structurize(patient_id, emr, structure_1, structure_2):
         if '中医' not in item:
             new_emr += (item + '\n')
     new_emr = new_emr.strip()
-    origin_emr = new_emr
+    # origin_emr = new_emr
 
     if new_emr.find('病史特点') != -1:
         structure = structure_1
@@ -185,7 +163,7 @@ def _first_emr_structurize(patient_id, emr, structure_1, structure_2):
                     emr_end_index = end_item_alias_index_list[0][0]
                 if emr_end_index == -1:
                     if end_item[0] != '诊断依据':
-                        print('{}, missing component: {}'.format(patient_id, end_item[0]))
+                        # print('{}, missing component: {}'.format(patient_id, end_item[0]))
                         complete_flag = False
                     end_item_index += 1
                 else:
@@ -197,22 +175,26 @@ def _first_emr_structurize(patient_id, emr, structure_1, structure_2):
 
         if emr_end_index != -1:
             structured_data[start_item[0]] = \
-                new_emr[emr_start_index + len(start_item[emr_start_item_alias_index]): emr_end_index].\
-                    replace('\n', ' ').replace('*', '')
+                new_emr[emr_start_index + len(start_item[emr_start_item_alias_index]): emr_end_index]
+            structured_data[start_item[0]] = \
+                structured_data[start_item[0]]
             new_emr = new_emr[emr_end_index:]
-        else:
-            print('error')
+        # else:
+        #     print('error')
+
+    for key in structured_data:
+        structured_data[key] = structured_data[key].replace('\n', '').replace('*', '').replace('\u002a', '')
     return structured_data, complete_flag, template_type
 
 
-def print_admission_data_dict(admission_data_dict, semi_structure_admission_path):
+def save_admission_data_dict(admission_data_dict, admission_path):
     data_to_write = [['patient_id', '项目', '内容']]
     for patient_id in admission_data_dict:
         for key in admission_data_dict[patient_id]:
             content = admission_data_dict[patient_id][key]
             data_to_write.append([patient_id, key, content])
 
-    with open(semi_structure_admission_path, 'w', encoding='utf-8-sig', newline='') as f:
+    with open(admission_path, 'w', encoding='utf-8-sig', newline='') as f:
         csv.writer(f).writerows(data_to_write)
 
 
@@ -227,9 +209,13 @@ def admission_record_structurize(data):
         personalized_parse_list = identify_parse_sequence(line[0], line[3], parse_list)
         content_dict = content_format(line[0], line[3], personalized_parse_list)
         content_dict['诊断'] = line[2]
-        if line[0] in admission_data_dict:
-            print('Duplicate')
-        admission_data_dict[line[0]] = content_dict
+        # if line[0] in admission_data_dict:
+        #     print('Duplicate')
+
+        for key in content_dict:
+            content_dict[key] = content_dict[key].replace('\n', '').replace('*', '').replace('\u002a', '')
+        key = line[0]+'_'+line[2]
+        admission_data_dict[key] = content_dict
     return admission_data_dict
 
 
@@ -263,12 +249,12 @@ def identify_parse_sequence(patient_id, data_str, sequential_split):
     for item in new_parse_order_list:
         personalized_parse_list.append([item[0], item[2]])
 
-    for item in match_dict:
-        if len(match_dict[item]) == 0:
-            if item not in {"家系谱图", '谈话记录', '月经史', '联系方式', '家庭地址', '身份证号', '宗教', '寄养'} and not \
-                    ('出院诊断' in origin_emr):
-                if patient_id not in {'381501'}:
-                    print('{}, item: {} not found'.format(patient_id, item))
+    # for item in match_dict:
+    #     if len(match_dict[item]) == 0:
+    #         if item not in {"家系谱图", '谈话记录', '月经史', '联系方式', '家庭地址', '身份证号', '宗教', '寄养'} and not \
+    #                 ('出院诊断' in origin_emr):
+    #             # if patient_id not in {'381501'}:
+    #             #     print('{}, item: {} not found'.format(patient_id, item))
     return personalized_parse_list
 
 
@@ -309,7 +295,7 @@ def content_format(patient_id, data_str, sequential_split):
                 break
 
         if str_start_start_idx == -1:
-            print('{}, {}, not found'.format(patient_id, sequential_split[element_start_idx][0]))
+            # print('{}, {}, not found'.format(patient_id, sequential_split[element_start_idx][0]))
             element_start_idx += 1
             continue
 
@@ -333,13 +319,13 @@ def content_format(patient_id, data_str, sequential_split):
             str_end_start_idx = len(data_str)
 
         element_start_idx += 1
-        data_dict[element_name] += ' ' + data_str[str_start_end_idx: str_end_start_idx].replace('\n', ' ')
+        data_dict[element_name] += ' ' + data_str[str_start_end_idx: str_end_start_idx]
         data_str = data_str[str_end_start_idx:]
 
     return data_dict
 
 
-def reorganize_data(file_path, file_path_template, read_from_cache=True):
+def reorganize_data(file_path, file_path_template, read_from_cache=False):
     if read_from_cache is True and os.path.exists(file_path):
         data = []
         with open(file_path, 'r', encoding='utf-8-sig', newline='') as f:
@@ -368,12 +354,12 @@ def reorganize_data(file_path, file_path_template, read_from_cache=True):
     return data
 
 
-def re_save_data(file_path_template, save_folder, re_save=False):
+def re_save_data(file_path_template, save_, re_save=False):
     folder_name_list = ['双相', '抑郁', '焦虑障碍']
     file_name_list = ['入院记录', '出院记录', '病程记录', '首次查房记录', '首次病程记录']
     for diagnosis in folder_name_list:
         for file_type in file_name_list:
-            write_path = os.path.join(save_folder, diagnosis + '_' + file_type + '.csv')
+            write_path = os.path.join(save_, diagnosis + '_' + file_type + '.csv')
             if re_save is False and os.path.exists(write_path):
                 return True
             path = file_path_template.format(diagnosis, file_type)
