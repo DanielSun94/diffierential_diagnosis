@@ -1,13 +1,52 @@
+import random
+import numpy as np
+import os
+import pickle
+from data_preprocess.data_reformat import load_data, reconstruct_data
 import hanlp
 from config import topic_model_first_emr_parse_list, topic_model_admission_parse_list, diagnosis_map, \
     word_count_path, skip_word_set
-import pickle
-import numpy as np
-import os
-from util import five_fold_datasets, dataset_format, evaluation
-from data_reformat import load_data, reconstruct_data
-from sklearn.neural_network import MLPClassifier
-from sklearn.decomposition import LatentDirichletAllocation
+
+
+def five_fold_datasets(data):
+    """
+    五折交叉验证
+    """
+    data_list = []
+    for key in data:
+        single_data, diagnosis = data[key][0], data[key][1]
+        data_list.append([key, single_data, diagnosis])
+    index_list = [i for i in range(len(data_list))]
+    random.shuffle(index_list)
+
+    shuffled_data_list = []
+    for index in index_list:
+        shuffled_data_list.append(data_list[index])
+
+    fold_size = len(shuffled_data_list) // 5
+    shuffled_data = [
+        shuffled_data_list[0: fold_size],
+        shuffled_data_list[fold_size: fold_size * 2],
+        shuffled_data_list[fold_size * 2: fold_size * 3],
+        shuffled_data_list[fold_size * 3: fold_size * 4],
+        shuffled_data_list[fold_size * 4:],
+    ]
+    return shuffled_data
+
+
+def dataset_format(dataset):
+    feature, label = list(), list()
+    for item in dataset:
+        feature.append(item[1])
+        label.append(item[2])
+    return feature, label
+
+
+def evaluation(predict, label):
+    predict_label = np.argmax(predict, axis=1)
+    accuracy = np.sum(label == predict_label) / len(label)
+    return accuracy
+
 
 
 def bag_of_word_reorganize(vocab_size):
@@ -68,39 +107,3 @@ def word_index_convert(data, save_path, vocab_size, read_from_cache=True):
                 content_idx_list[vocab_size-1] += 1
         tokenize_data[key] = content_idx_list, diagnosis
     return word_index_map, tokenize_data
-
-
-def train(topic_number, vocab_size):
-    word_index_map, reformat_data = bag_of_word_reorganize(vocab_size)
-    five_fold_data = five_fold_datasets(reformat_data)
-    accuracy_list = []
-    for i in range(5):
-        # print('iter: {}'.format(i))
-        test_dataset, train_dataset = five_fold_data[i], []
-        for j in range(5):
-            if i != j:
-                for item in five_fold_data[j]:
-                    train_dataset.append(item)
-        train_dataset, test_dataset = dataset_format(train_dataset), dataset_format(test_dataset)
-        lda = LatentDirichletAllocation(n_components=topic_number, random_state=0)
-        lda.fit(train_dataset[0])
-        train_representation = lda.transform(train_dataset[0])
-        test_representation = lda.transform(test_dataset[0])
-        mlp_model = MLPClassifier(hidden_layer_sizes=(), max_iter=2000)
-        mlp_model.fit(train_representation, train_dataset[1])
-        prediction = mlp_model.predict_proba(test_representation)
-        accuracy = evaluation(prediction, test_dataset[1])
-        # print('iter {}, accuracy: {}'.format(i, accuracy))
-        accuracy_list.append(accuracy)
-    print('accuracy: {}'.format(np.average(accuracy_list)))
-
-
-def main():
-    for topic_num in 5, 10, 20, 30:
-        for vocab_size in 5000, 10000, 15000, 20000, 30000:
-            print('topic number: {}, vocab_number: {}'.format(topic_num, vocab_size))
-            train(topic_num, vocab_size)
-
-
-if __name__ == '__main__':
-    main()

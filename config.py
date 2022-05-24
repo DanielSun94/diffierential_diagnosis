@@ -2,11 +2,14 @@ import os
 import re
 
 
-device = 'cuda:2'
+device = 'cuda:7'
 cache_dir = '/data/sunzhoujian/hugginface/'
 diagnosis_map = {'双相': 0, '抑郁': 1, '焦虑障碍': 2}
 vocab_size_lda = 3000
-topic_number = 10
+topic_number_lda = 10
+vocab_size_ntm = 3000
+topic_number_ntm = 4
+hidden_size_ntm = 128
 
 
 cn_CLS_token = '[CLS]'
@@ -61,12 +64,12 @@ neural_network_admission_parse_list = ['现病史']
 neural_network_first_emr_parse_list = []
 
 
-integrate_file_name = os.path.abspath('../../data/data_utf_8/integrate_data.csv')
-emr_parse_file_path = os.path.abspath('../../data/data_utf_8/病程记录解析序列.csv')
+integrate_file_name = os.path.abspath('./data/data_utf_8/integrate_data.csv')
+emr_parse_file_path = os.path.abspath('./data/data_utf_8/病程记录解析序列.csv')
 
-semi_structure_admission_path = os.path.abspath('../../data/data_utf_8/半结构化入院记录.csv')
-data_file_template = os.path.abspath('../../data/origin_data/{}/{}.csv')
-save_folder = os.path.abspath('../../data/data_utf_8')
+semi_structure_admission_path = os.path.abspath('./data/data_utf_8/半结构化入院记录.csv')
+data_file_template = os.path.abspath('./data/origin_data/{}/{}.csv')
+save_folder = os.path.abspath('./data/data_utf_8')
 reorganize_first_emr_path = os.path.join(save_folder, 'first_emr_reorganize.csv')
 tokenize_data_save_path = os.path.join(save_folder, 'tokenize_data.pkl')
 word_count_path = os.path.join(save_folder, 'word_count.pkl')
