@@ -1,51 +1,7 @@
-import torch
 from torch import nn
 from torch.nn import Linear, Sequential, Tanh
 from torch.nn import init
-import numpy as np
-from util import bag_of_word_reorganize, five_fold_datasets, dataset_format, evaluation
-from config import hidden_size_ntm, device
-import torch.optim as optim
-from sklearn.neural_network import MLPClassifier
-
-
-def main():
-    n_iter = 2000
-    for topic_number_ntm in 50, 100, 200, 300, 400:
-        for vocab_size_ntm in 10000, 20000:
-            word_index_map, reformat_data = bag_of_word_reorganize(vocab_size_ntm)
-            five_fold_data = five_fold_datasets(reformat_data)
-            accuracy_list = list()
-            for i in range(5):
-                # print('iter: {}'.format(i))
-                test_dataset, train_dataset = five_fold_data[i], []
-                for j in range(5):
-                    if i != j:
-                        for item in five_fold_data[j]:
-                            train_dataset.append(item)
-                train_dataset, test_dataset = dataset_format(train_dataset), dataset_format(test_dataset)
-                train_feature = torch.FloatTensor(train_dataset[0]).to(device)
-                test_feature = torch.FloatTensor(test_dataset[0]).to(device)
-                model = NTM(hidden_size_ntm, topic_number_ntm, vocab_size_ntm).to(device)
-                optimizer = optim.Adam(model.parameters(), lr=0.001)
-
-                for _ in range(0, n_iter):
-                    optimizer.zero_grad()
-                    output = model(train_feature)
-                    # print('loss: {}'.format(output['loss'].mean()))
-                    output['loss'].mean().backward()
-                    optimizer.step()
-
-                train_representation = model.get_topic_distribution(train_feature).detach().to('cpu').numpy()
-                test_representation = model.get_topic_distribution(test_feature).detach().to('cpu').numpy()
-                mlp_model = MLPClassifier(hidden_layer_sizes=(), max_iter=2000)
-                mlp_model.fit(train_representation, train_dataset[1])
-                prediction = mlp_model.predict_proba(test_representation)
-                accuracy = evaluation(prediction, test_dataset[1])
-                # print('iter {}, accuracy: {}'.format(i, accuracy))
-                accuracy_list.append(accuracy)
-            print('topic number: {}, vocab size: {}'.format(topic_number_ntm, vocab_size_ntm))
-            print('accuracy: {}'.format(np.average(accuracy_list)))
+import torch
 
 
 class NTM(nn.Module):
@@ -58,6 +14,7 @@ class NTM(nn.Module):
         self.normal = NormalParameter(hidden_size, topic_size)
         self.h_to_z = Identity()
         self.topics = Topics(topic_size, vocab_size)
+        self.softmax = nn.Softmax(dim=1)
 
     def forward(self, x, n_sample=1):
         h = self.hidden(x)
@@ -65,33 +22,37 @@ class NTM(nn.Module):
 
         kld = kld_normal(mu, log_sigma)
         rec_loss = 0
-        for i in range(n_sample):
-            z = torch.zeros_like(mu).normal_() * torch.exp(log_sigma) + mu
-            z = self.h_to_z(z)
-            log_prob = self.topics(z)
-            rec_loss = rec_loss - (log_prob * x).sum(dim=-1)
+        # for i in range(n_sample):
+        #     z = torch.zeros_like(mu).normal_() * torch.exp(log_sigma) + mu
+        #     z = self.h_to_z(z)
+        #     log_prob = self.topics(z)
+        #     rec_loss = rec_loss - (log_prob * x).sum(dim=-1)
+
+        z = torch.zeros_like(mu).normal_() * torch.exp(log_sigma) + mu
+        z = self.h_to_z(z)
+        log_prob = self.topics(z)
+        rec_loss = rec_loss - (log_prob * x).sum(dim=-1)
+
         rec_loss = rec_loss / n_sample
-
         minus_elbo = rec_loss + kld
-
         return {
-            'loss': minus_elbo,
+            'ntm_loss': minus_elbo,
             'minus_elbo': minus_elbo,
             'rec_loss': rec_loss,
-            'kld': kld
+            'kld': kld,
+            'z': z
         }
 
     def get_topics(self):
         return self.topics.get_topics()
 
     def get_topic_distribution(self, x, n_sample=1000):
-        softmax = nn.Softmax(dim=1)
         h = self.hidden(x)
         mu, log_sigma = self.normal(h)
         prob = torch.zeros_like(mu)
         for i in range(n_sample):
             z = torch.zeros_like(mu).normal_() * torch.exp(log_sigma) + mu
-            prob += softmax(z)
+            prob += self.softmax(z)
         prob = prob / n_sample
         return prob
 
@@ -172,18 +133,3 @@ class Identity(nn.Module):
         if len(input) == 1:
             return input[0]
         return input
-
-
-def test():
-    hidden_size = 500
-    topic_size = 50
-    vocab_size = 1994
-    model = NTM(hidden_size=hidden_size, topic_size=topic_size, vocab_size=vocab_size)
-    x = np.random.randint(0, 100, [64, 1994])
-    model(torch.FloatTensor(x))
-    print('accomplish')
-
-
-if __name__ == '__main__':
-    # test()
-    main()

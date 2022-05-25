@@ -1,15 +1,55 @@
 import os
 import re
-
+import argparse
+import logging
 
 device = 'cuda:7'
-cache_dir = '/data/sunzhoujian/hugginface/'
-diagnosis_map = {'双相': 0, '抑郁': 1, '焦虑障碍': 2}
 vocab_size_lda = 3000
+read_from_cache = False
 topic_number_lda = 10
-vocab_size_ntm = 3000
-topic_number_ntm = 4
+vocab_size_ntm = 10000
+topic_number_ntm = 100
 hidden_size_ntm = 128
+batch_size = 128
+learning_rate = 0.001
+epoch_number = 200
+similarity_coefficient = 0
+ntm_coefficient = 1
+contrastive_coefficient = 0
+tau = 1
+process_name = 'entm'
+
+parser = argparse.ArgumentParser(description='')
+parser.add_argument("--device", default=device, type=str, help="")
+parser.add_argument("--vocab_size_lda", default=vocab_size_lda, type=int, help="")
+parser.add_argument("--topic_number_lda", default=topic_number_lda, type=int, help="")
+parser.add_argument("--vocab_size_ntm", default=vocab_size_ntm, type=int, help="")
+parser.add_argument("--topic_number_ntm", default=topic_number_ntm, type=int, help="")
+parser.add_argument("--hidden_size_ntm", default=hidden_size_ntm, type=int, help="")
+parser.add_argument("--batch_size", default=batch_size, type=int, help="")
+parser.add_argument("--learning_rate", default=learning_rate, type=float, help="")
+parser.add_argument("--epoch_number", default=epoch_number, type=int, help="")
+parser.add_argument("--similarity_coefficient", default=similarity_coefficient, type=float, help="")
+parser.add_argument("--ntm_coefficient", default=ntm_coefficient, type=float, help="")
+parser.add_argument("--contrastive_coefficient", default=contrastive_coefficient, type=float, help="")
+parser.add_argument("--tau", default=tau, type=int, help="")
+parser.add_argument("--process_name", default=process_name, type=str, help="")
+parser.add_argument("--read_from_cache", default=read_from_cache, type=bool, help="")
+
+args = vars(parser.parse_args())
+
+log_file_name = os.path.abspath('./log_{}.txt'.format(process_name))
+FORMAT = "%(asctime)s %(message)s"
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
+logging.basicConfig(level=logging.INFO, format=FORMAT, filename=log_file_name)
+console_logger = logging.StreamHandler()
+# console output format
+stream_format = logging.Formatter("%(asctime)s %(process)d %(module)s %(lineno)d %(message)s")
+# file output format
+console_logger.setFormatter(stream_format)
+logger.addHandler(console_logger)
+logger.info("|------logger.info-----")
 
 
 cn_CLS_token = '[CLS]'
@@ -55,21 +95,20 @@ parse_list = [
     ['医师签名', re.compile('\u533b[\*\s]*\u5e08[\*\s]*\u7b7e[\*\s]*\u540d[\uff1a:\n\t\s]+')],
 ]
 
+cache_dir = '/data/sunzhoujian/hugginface/'
+diagnosis_map = {'双相': 0, '抑郁': 1, '焦虑障碍': 2}
 skip_word_set = {'，', '、', ':', '：', '。', '”', '“', ';'}
-
 topic_model_admission_parse_list = ['主诉', '现病史', '既往史', '个人史', '家族史', '体格检查', '精神检查', '辅助检查',
                                     '神经系统检查', '性别', '年龄', '婚姻', '出生地', '职业']
 topic_model_first_emr_parse_list = ['1、', '2、', '3、', '4、', '5、', '6、']
 neural_network_admission_parse_list = ['现病史']
 neural_network_first_emr_parse_list = []
-
-
 integrate_file_name = os.path.abspath('./data/data_utf_8/integrate_data.csv')
 emr_parse_file_path = os.path.abspath('./data/data_utf_8/病程记录解析序列.csv')
-
 semi_structure_admission_path = os.path.abspath('./data/data_utf_8/半结构化入院记录.csv')
 data_file_template = os.path.abspath('./data/origin_data/{}/{}.csv')
 save_folder = os.path.abspath('./data/data_utf_8')
 reorganize_first_emr_path = os.path.join(save_folder, 'first_emr_reorganize.csv')
 tokenize_data_save_path = os.path.join(save_folder, 'tokenize_data.pkl')
 word_count_path = os.path.join(save_folder, 'word_count.pkl')
+contrastive_ntm_data_cache = os.path.join(save_folder, 'contrastive_ntm_data_cache.pkl')
