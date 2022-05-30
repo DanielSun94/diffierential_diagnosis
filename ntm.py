@@ -16,7 +16,7 @@ class NTM(nn.Module):
         self.topics = Topics(topic_size, vocab_size)
         self.softmax = nn.Softmax(dim=1)
 
-    def forward(self, x, n_sample=1):
+    def forward(self, x, n_sample=10):
         h = self.hidden(x)
         mu, log_sigma = self.normal(h)
 
@@ -27,9 +27,11 @@ class NTM(nn.Module):
         #     z = self.h_to_z(z)
         #     log_prob = self.topics(z)
         #     rec_loss = rec_loss - (log_prob * x).sum(dim=-1)
-
-        z = torch.zeros_like(mu).normal_() * torch.exp(log_sigma) + mu
-        z = self.h_to_z(z)
+        z = 0
+        for i in range(n_sample):
+            z_ = torch.zeros_like(mu).normal_() * torch.exp(log_sigma) + mu
+            z += self.h_to_z(z_)
+        z = z / n_sample
         log_prob = self.topics(z)
         rec_loss = rec_loss - (log_prob * x).sum(dim=-1)
 
@@ -46,7 +48,7 @@ class NTM(nn.Module):
     def get_topics(self):
         return self.topics.get_topics()
 
-    def get_topic_distribution(self, x, n_sample=1000):
+    def get_topic_distribution(self, x, n_sample=50):
         h = self.hidden(x)
         mu, log_sigma = self.normal(h)
         prob = torch.zeros_like(mu)
@@ -65,30 +67,29 @@ def kld_normal(mu, log_sigma):
     return -0.5 * (1 - mu ** 2 + 2 * log_sigma - torch.exp(2 * log_sigma)).sum(dim=-1)
 
 
-
-def topic_covariance_penalty(topic_emb, EPS=1e-12):
+def topic_covariance_penalty(topic_emb, eps=1e-12):
     """topic_emb: T x topic_dim."""
-    normalized_topic = topic_emb / (torch.norm(topic_emb, dim=-1, keepdim=True) + EPS)
+    normalized_topic = topic_emb / (torch.norm(topic_emb, dim=-1, keepdim=True) + eps)
     cosine = (normalized_topic @ normalized_topic.transpose(0, 1)).abs()
     mean = cosine.mean()
     var = ((cosine - mean) ** 2).mean()
     return mean - var, var, mean
 
 
-def topic_embedding_weighted_penalty(embedding_weight, topic_word_logit, EPS=1e-12):
+def topic_embedding_weighted_penalty(embedding_weight, topic_word_logit, eps=1e-12):
     """embedding_weight: V x dim, topic_word_logit: T x V."""
     w = topic_word_logit.transpose(0, 1)  # V x T
 
-    nv = embedding_weight / (torch.norm(embedding_weight, dim=1, keepdim=True) + EPS)  # V x dim
-    nw = w / (torch.norm(w, dim=0, keepdim=True) + EPS)  # V x T
+    nv = embedding_weight / (torch.norm(embedding_weight, dim=1, keepdim=True) + eps)  # V x dim
+    nw = w / (torch.norm(w, dim=0, keepdim=True) + eps)  # V x T
     t = nv.transpose(0, 1) @ w  # dim x T
-    nt = t / (torch.norm(t, dim=0, keepdim=True) + EPS)  # dim x T
+    nt = t / (torch.norm(t, dim=0, keepdim=True) + eps)  # dim x T
     s = nv @ nt  # V x T
     return -(s * nw).sum()  # minus for minimization
 
 
 class Topics(nn.Module):
-    def __init__(self, k, vocab_size, bias=True):
+    def __init__(self, k, vocab_size, bias=False):
         super(Topics, self).__init__()
         self.k = k
         self.vocab_size = vocab_size
@@ -103,7 +104,7 @@ class Topics(nn.Module):
 
     def get_topic_word_logit(self):
         """topic x V.
-        Return the logits instead of probability distribution
+        Return the logit instead of probability distribution
         """
         return self.topic.weight.transpose(0, 1)
 
@@ -129,7 +130,8 @@ class Identity(nn.Module):
     def __init__(self):
         super(Identity, self).__init__()
 
-    def forward(self, *input):
-        if len(input) == 1:
-            return input[0]
-        return input
+    @staticmethod
+    def forward(*input_):
+        if len(input_) == 1:
+            return input_[0]
+        return input_

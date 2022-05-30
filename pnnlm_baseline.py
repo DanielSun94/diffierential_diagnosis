@@ -2,6 +2,7 @@ import numpy as np
 from sklearn.neural_network import MLPClassifier
 from util import five_fold_datasets, dataset_format, evaluation, data_embedding
 from config import tokenize_data_save_path
+import random
 
 
 def train(data):
@@ -28,7 +29,9 @@ def train(data):
 
 def main():
     embedding = data_embedding(tokenize_data_save_path, True)
-    five_fold_data = five_fold_datasets(embedding)
+    index_list = [i for i in range(len(embedding))]
+    random.shuffle(index_list)
+    five_fold_data = five_fold_datasets(embedding, index_list)
     train(five_fold_data)
 
 

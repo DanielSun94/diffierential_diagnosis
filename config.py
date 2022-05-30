@@ -8,19 +8,23 @@ vocab_size_lda = 3000
 read_from_cache = False
 topic_number_lda = 10
 vocab_size_ntm = 10000
-topic_number_ntm = 100
+topic_number_ntm = 20
 hidden_size_ntm = 128
 batch_size = 128
 learning_rate = 0.001
-epoch_number = 200
+epoch_number = 300
 similarity_coefficient = 0
 ntm_coefficient = 1
+topic_coefficient = 0
 contrastive_coefficient = 0
 tau = 1
+classify_model = 'nn'
+sample_size = 10
 process_name = 'entm'
 
 parser = argparse.ArgumentParser(description='')
 parser.add_argument("--device", default=device, type=str, help="")
+parser.add_argument("--classify_model", default=classify_model, type=str, help="")
 parser.add_argument("--vocab_size_lda", default=vocab_size_lda, type=int, help="")
 parser.add_argument("--topic_number_lda", default=topic_number_lda, type=int, help="")
 parser.add_argument("--vocab_size_ntm", default=vocab_size_ntm, type=int, help="")
@@ -32,10 +36,11 @@ parser.add_argument("--epoch_number", default=epoch_number, type=int, help="")
 parser.add_argument("--similarity_coefficient", default=similarity_coefficient, type=float, help="")
 parser.add_argument("--ntm_coefficient", default=ntm_coefficient, type=float, help="")
 parser.add_argument("--contrastive_coefficient", default=contrastive_coefficient, type=float, help="")
+parser.add_argument("--topic_coefficient", default=topic_coefficient, type=float, help="")
 parser.add_argument("--tau", default=tau, type=int, help="")
 parser.add_argument("--process_name", default=process_name, type=str, help="")
 parser.add_argument("--read_from_cache", default=read_from_cache, type=bool, help="")
-
+parser.add_argument("--sample_size", default=sample_size, type=bool, help="")
 args = vars(parser.parse_args())
 
 log_file_name = os.path.abspath('./log_{}.txt'.format(process_name))

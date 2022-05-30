@@ -7,6 +7,8 @@ import torch
 from data_reformat import load_data, reconstruct_data
 import hanlp
 import pkuseg
+from sklearn.metrics import recall_score, f1_score, precision_score, accuracy_score, roc_auc_score, \
+    precision_recall_curve
 from config import topic_model_first_emr_parse_list, topic_model_admission_parse_list, word_count_path, skip_word_set, \
     cn_CLS_token, neural_network_admission_parse_list, neural_network_first_emr_parse_list, cache_dir, device, \
     diagnosis_map
@@ -86,10 +88,30 @@ def dataset_format(dataset):
         raise ValueError('')
 
 
-def evaluation(predict, label):
-    predict_label = np.argmax(predict, axis=1)
-    accuracy = np.sum(label == predict_label) / len(label)
-    return accuracy
+def evaluation(predict_prob, label):
+    predict = np.argmax(predict_prob, axis=1)
+    micro_recall = recall_score(label, predict, average='micro')
+    macro_recall = recall_score(label, predict, average='macro')
+    micro_precision = precision_score(label, predict, average='micro')
+    macro_precision = precision_score(label, predict, average='macro')
+    micro_f1 = f1_score(label, predict, average='micro')
+    macro_f1 = f1_score(label, predict, average='macro')
+    accuracy = accuracy_score(label, predict)
+
+    # micro_auc = roc_auc_score(label, predict_prob, multi_class='ovo')
+    macro_auc = roc_auc_score(label, predict_prob, multi_class='ovr')
+    performance = {
+        'accuracy': accuracy,
+        'micro_recall': micro_recall,
+        'macro_recall': macro_recall,
+        'micro_precision': micro_precision,
+        'macro_precision': macro_precision,
+        'micro_f1': micro_f1,
+        'macro_f1': macro_f1,
+        # 'micro_auc': micro_auc,
+        'macro_auc': macro_auc,
+    }
+    return performance
 
 
 def bag_of_word_reorganize(vocab_size):
