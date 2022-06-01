@@ -18,7 +18,7 @@ class ContrastiveNTM(Module):
     def __init__(self, hidden_size, topic_number, vocab_size, device, tau):
         super(ContrastiveNTM, self).__init__()
         self.device = device
-        self.ntm = NTM(hidden_size, topic_number, vocab_size).to(device)
+        self.ntm = NTM(hidden_size, topic_number, vocab_size, device).to(device)
         self.tau = tau
         self.topic_number = topic_number
 
@@ -38,34 +38,32 @@ class ContrastiveNTM(Module):
         topic_word_similarity = self.pairwise_similarity(topic_word_distribution, topic_word_distribution)
         multiply_mat = (ones([topic_number, topic_number])-diag(ones([topic_number]))).to(self.device)
         topic_word_similarity = torch.multiply(topic_word_similarity, multiply_mat)
-        # output['topic_word_loss'] = -1 * topic_word_similarity
-        output['topic_word_loss'] = torch.FloatTensor(0)
+        output['topic_word_loss'] = -1 * topic_word_similarity
+        # output['topic_word_loss'] = torch.FloatTensor(0)
 
         # similarity loss
-        # doc_topic_distribution = torch.softmax(z, dim=1)
-        # doc_topic_similarity = self.pairwise_similarity(doc_topic_distribution, doc_topic_distribution)
-        # semantic_similarity = self.pairwise_similarity(nnlm_representation, nnlm_representation)
-        # difference = (semantic_similarity-doc_topic_similarity)
-        # a, b, c = difference.detach().to('cpu').numpy(), semantic_similarity.detach().to('cpu').numpy(),
-        # doc_topic_similarity.detach().to('cpu').numpy()
-        # similarity_loss = torch.sum(difference*difference)
-        # output['similarity_loss'] = similarity_loss
-        output['similarity_loss'] = torch.FloatTensor(0)
+        doc_topic_distribution = torch.softmax(z, dim=1)
+        doc_topic_similarity = self.pairwise_similarity(doc_topic_distribution, doc_topic_distribution)
+        semantic_similarity = self.pairwise_similarity(nnlm_representation, nnlm_representation)
+        difference = (semantic_similarity-doc_topic_similarity)
+        similarity_loss = torch.sum(difference*difference)
+        output['similarity_loss'] = similarity_loss
+        # output['similarity_loss'] = torch.FloatTensor(0)
 
         # contrastive loss, info NCE
         # 不算自身的相似度
-        # size = topic_similarity.shape[0]
-        # contrastive_info_mat = torch.multiply(topic_similarity, (ones([size, size]) - \
-        # diag(ones(size))).to(self.device))
-        # contrastive_info_mat = torch.exp(contrastive_info_mat)
-        #
-        # nominator = contrastive_info_mat * same_class_mat
-        # nominator = torch.sum(nominator, dim=1)
-        # denominator = torch.sum(contrastive_info_mat, dim=1)
-        # contrastive_loss = torch.tensor(-1) * torch.log(nominator / denominator)
-        # contrastive_loss = torch.sum(contrastive_loss)
-        # output['contrastive_loss'] = contrastive_loss
-        output['contrastive_loss'] = torch.FloatTensor(0)
+        size = doc_topic_similarity.shape[0]
+        contrastive_info_mat = torch.multiply(doc_topic_similarity, (ones([size, size]) -
+                                                                     diag(ones(size))).to(self.device))
+        contrastive_info_mat = torch.exp(contrastive_info_mat)
+
+        nominator = contrastive_info_mat * same_class_mat
+        nominator = torch.sum(nominator, dim=1)
+        denominator = torch.sum(contrastive_info_mat, dim=1)
+        contrastive_loss = torch.tensor(-1) * torch.log(nominator / denominator)
+        contrastive_loss = torch.sum(contrastive_loss)
+        output['contrastive_loss'] = contrastive_loss
+        # output['contrastive_loss'] = torch.FloatTensor(0)
         return output
 
     def pairwise_similarity(self, mat_1, mat_2, eps=10e-8):
@@ -108,6 +106,7 @@ def train(batch_size, hidden_size, topic_number, learning_rate, vocab_size, epoc
           contrastive_coefficient, similarity_coefficient, ntm_coefficient, device, tau, read_from_cache):
     data = load_data(read_from_cache, vocab_size)
     performance_list = list()
+    sample_size = args['sample_size']
     logger.info('topic number: {}, vocab size: {}, epoch number: {}'.format(topic_number, vocab_size, epoch_number))
     for i in range(5):
         # print('iter: {}'.format(i))
@@ -127,7 +126,7 @@ def train(batch_size, hidden_size, topic_number, learning_rate, vocab_size, epoc
             for batch_data in train_dataloader:
                 feature, representation, _, same_class_mat = batch_data
                 optimizer.zero_grad()
-                output = model(feature, representation, same_class_mat, args['sample_size'])
+                output = model(feature, representation, same_class_mat, sample_size)
 
                 contrastive_loss = output['contrastive_loss'].mean()
                 similarity_loss = output['similarity_loss'].mean()
@@ -158,8 +157,10 @@ def train(batch_size, hidden_size, topic_number, learning_rate, vocab_size, epoc
             raise ValueError('')
         train_feature = torch.FloatTensor(np.array(train_dataset[0])).to(device)
         test_feature = torch.FloatTensor(np.array(test_dataset[0])).to(device)
-        train_representation = model.ntm.get_topic_distribution(train_feature).detach().to('cpu').numpy()
-        test_representation = model.ntm.get_topic_distribution(test_feature).detach().to('cpu').numpy()
+        train_representation = model.ntm.get_topic_distribution(train_feature, sample_size, 'inference')\
+            .detach().to('cpu').numpy()
+        test_representation = model.ntm.get_topic_distribution(test_feature, sample_size, 'inference')\
+            .detach().to('cpu').numpy()
         classify_model.fit(train_representation, train_dataset[2])
         prediction = classify_model.predict_proba(test_representation)
         performance = evaluation(prediction, test_dataset[2])

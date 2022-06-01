@@ -5,57 +5,73 @@ import torch
 
 
 class NTM(nn.Module):
-    def __init__(self, hidden_size, topic_size, vocab_size):
+    def __init__(self, hidden_size, topic_size, vocab_size, device):
         super(NTM, self).__init__()
         self.hidden = Sequential(
             Linear(vocab_size, hidden_size),
             Tanh()
         )
-        self.normal = NormalParameter(hidden_size, topic_size)
+        self.normal = NormalParameter(hidden_size, topic_size, device)
         self.h_to_z = Identity()
         self.topics = Topics(topic_size, vocab_size)
         self.softmax = nn.Softmax(dim=1)
+        self.device = device
 
-    def forward(self, x, n_sample=10):
+    def forward(self, x, n_sample):
         h = self.hidden(x)
-        mu, log_sigma = self.normal(h)
+        mu, log_sigma = self.normal(h, n_sample)
 
         kld = kld_normal(mu, log_sigma)
         rec_loss = 0
-        # for i in range(n_sample):
-        #     z = torch.zeros_like(mu).normal_() * torch.exp(log_sigma) + mu
-        #     z = self.h_to_z(z)
-        #     log_prob = self.topics(z)
-        #     rec_loss = rec_loss - (log_prob * x).sum(dim=-1)
-        z = 0
-        for i in range(n_sample):
-            z_ = torch.zeros_like(mu).normal_() * torch.exp(log_sigma) + mu
-            z += self.h_to_z(z_)
-        z = z / n_sample
-        log_prob = self.topics(z)
-        rec_loss = rec_loss - (log_prob * x).sum(dim=-1)
 
-        rec_loss = rec_loss / n_sample
+        assert isinstance(n_sample, int)
+        if n_sample >= 1:
+            return_z = 0
+            for i in range(n_sample):
+                z = torch.zeros_like(mu).normal_() * torch.exp(log_sigma) + mu
+                z = self.h_to_z(z)
+                return_z += z
+                log_prob = self.topics(z)
+                rec_loss = rec_loss - (log_prob * x).sum(dim=-1)
+                rec_loss = rec_loss / n_sample
+            return_z /= n_sample
+        elif n_sample == 0:
+            z = mu
+            z = self.h_to_z(z)
+            return_z = z
+            log_prob = self.topics(z)
+            rec_loss = rec_loss - (log_prob * x).sum(dim=-1)
+        else:
+            raise ValueError('')
+
         minus_elbo = rec_loss + kld
         return {
             'ntm_loss': minus_elbo,
             'minus_elbo': minus_elbo,
             'rec_loss': rec_loss,
             'kld': kld,
-            'z': z
+            'z': return_z
         }
 
     def get_topics(self):
         return self.topics.get_topics()
 
-    def get_topic_distribution(self, x, n_sample=50):
+    def get_topic_distribution(self, x, n_sample, stage):
         h = self.hidden(x)
-        mu, log_sigma = self.normal(h)
+        mu, log_sigma = self.normal(h, n_sample)
         prob = torch.zeros_like(mu)
-        for i in range(n_sample):
-            z = torch.zeros_like(mu).normal_() * torch.exp(log_sigma) + mu
+        assert isinstance(n_sample, int) and n_sample >= 0
+        if n_sample > 0:
+            for i in range(n_sample):
+                if stage == 'inference':
+                    z = mu
+                else:
+                    z = torch.zeros_like(mu).normal_() * torch.exp(log_sigma) + mu
+                prob += self.softmax(z)
+            prob = prob / n_sample
+        else:
+            z = mu
             prob += self.softmax(z)
-        prob = prob / n_sample
         return prob
 
 
@@ -110,15 +126,18 @@ class Topics(nn.Module):
 
 
 class NormalParameter(nn.Module):
-    def __init__(self, in_features, out_features):
+    def __init__(self, in_features, out_features, device):
         super(NormalParameter, self).__init__()
         self.in_features = in_features
         self.out_features = out_features
         self.mu = nn.Linear(in_features, out_features)
         self.log_sigma = nn.Linear(in_features, out_features)
+        self.device = device
         self.reset_parameters()
 
-    def forward(self, h):
+    def forward(self, h, n_sample):
+        if n_sample == 0:
+            return self.mu(h), torch.FloatTensor([0]).to(self.device)
         return self.mu(h), self.log_sigma(h)
 
     def reset_parameters(self):
