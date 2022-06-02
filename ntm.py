@@ -4,45 +4,30 @@ from torch.nn import init
 import torch
 
 
-class NTM(nn.Module):
+class RevisedNTM(nn.Module):
     def __init__(self, hidden_size, topic_size, vocab_size, device):
-        super(NTM, self).__init__()
+        super(RevisedNTM, self).__init__()
         self.hidden = Sequential(
-            Linear(vocab_size, hidden_size),
-            Tanh()
+            Linear(vocab_size, hidden_size, bias=False),
+            nn.LeakyReLU()
         )
+        init.xavier_normal_(self.hidden[0].weight)
         self.normal = NormalParameter(hidden_size, topic_size, device)
-        self.h_to_z = Identity()
-        self.topics = Topics(topic_size, vocab_size)
+        self.topics = RevisedNTMTopics(topic_size, vocab_size, device)
+        self.h_to_z = nn.Softmax(dim=1)
         self.softmax = nn.Softmax(dim=1)
         self.device = device
 
-    def forward(self, x, n_sample):
-        h = self.hidden(x)
-        mu, log_sigma = self.normal(h, n_sample)
-
+    def forward(self, x):
+        h_1 = self.hidden(x)
+        mu, log_sigma = self.normal(h_1)
         kld = kld_normal(mu, log_sigma)
-        rec_loss = 0
 
-        assert isinstance(n_sample, int)
-        if n_sample >= 1:
-            return_z = 0
-            for i in range(n_sample):
-                z = torch.zeros_like(mu).normal_() * torch.exp(log_sigma) + mu
-                z = self.h_to_z(z)
-                return_z += z
-                log_prob = self.topics(z)
-                rec_loss = rec_loss - (log_prob * x).sum(dim=-1)
-                rec_loss = rec_loss / n_sample
-            return_z /= n_sample
-        elif n_sample == 0:
-            z = mu
-            z = self.h_to_z(z)
-            return_z = z
-            log_prob = self.topics(z)
-            rec_loss = rec_loss - (log_prob * x).sum(dim=-1)
-        else:
-            raise ValueError('')
+        h_2 = torch.zeros_like(mu).normal_() * torch.exp(log_sigma) + mu
+        z = self.h_to_z(h_2)
+        # print(torch.sum(z, dim=1))
+        log_prob = self.topics(z)
+        rec_loss = - (log_prob * x).sum(dim=-1)
 
         minus_elbo = rec_loss + kld
         return {
@@ -50,28 +35,118 @@ class NTM(nn.Module):
             'minus_elbo': minus_elbo,
             'rec_loss': rec_loss,
             'kld': kld,
-            'z': return_z
+            'h': h_2
         }
 
     def get_topics(self):
         return self.topics.get_topics()
 
-    def get_topic_distribution(self, x, n_sample, stage):
-        h = self.hidden(x)
-        mu, log_sigma = self.normal(h, n_sample)
-        prob = torch.zeros_like(mu)
-        assert isinstance(n_sample, int) and n_sample >= 0
-        if n_sample > 0:
-            for i in range(n_sample):
-                if stage == 'inference':
-                    z = mu
-                else:
-                    z = torch.zeros_like(mu).normal_() * torch.exp(log_sigma) + mu
-                prob += self.softmax(z)
-            prob = prob / n_sample
+    def get_topic_distribution(self, x, stage):
+        h_1 = self.hidden(x)
+        mu, log_sigma = self.normal(h_1)
+        # hidden_parameter_numpy = self.hidden[0].weight.data.detach().to('cpu').numpy()
+        # observe_mu = mu.detach().to('cpu').numpy()
+        # h_1_numpy = h_1.detach().to('cpu').numpy()
+        # observe_sigma = torch.exp(log_sigma).detach().to('cpu').numpy()
+        if stage == 'inference':
+            h_2 = mu
         else:
+            h_2 = torch.zeros_like(mu).normal_() * torch.exp(log_sigma) + mu
+        #
+        # mu_numpy = h_2.detach().to('cpu').numpy()
+        # mu_weight_numpy = self.normal.mu.weight.data.detach().to('cpu').numpy()
+        # sigma_weight_numpy = self.normal.log_sigma.weight.data.detach().to('cpu').numpy()
+        prob = self.softmax(h_2)
+        # torch.sum(prob, dim=1)
+        # prob_numpy = prob.detach().to('cpu').numpy()
+        return prob
+
+
+class RevisedNTMTopics(nn.Module):
+    def __init__(self, topic_size, vocab_size, device, bias=False):
+        super(RevisedNTMTopics, self).__init__()
+        self.topic_size = topic_size
+        self.device = device
+        self.vocab_size = vocab_size
+        self.topic = nn.Linear(vocab_size, topic_size, bias=bias)
+        self.normalize = nn.Softmax(dim=1)
+        init.xavier_normal_(self.topic.weight)
+
+    def forward(self, z):
+        # return the log_prob of vocab distribution
+        # print(torch.sum(topic_word_distribution, dim=1))
+        topic = self.topic(torch.eye(self.vocab_size).to(self.device)).transpose(0, 1)
+        topic_normalize = self.normalize(topic)
+        # topic_normalize = self.topic_normalize_detach(topic)
+        mixture_distribution = torch.matmul(z, topic_normalize)
+        # print(torch.sum(mixture_distribution, dim=1))
+        log_mixture_distribution = torch.log(mixture_distribution)
+        return log_mixture_distribution
+
+    # def topic_normalize_detach(self, topic):
+    #     topic = topic - torch.max(topic.detach(), dim=1, keepdim=True).values
+    #     normalize = (torch.exp(topic) / torch.sum(torch.exp(topic.detach()), dim=1, keepdim=True)).to(self.device)
+    #     return normalize
+
+    def get_topics(self):
+        topic_distribution = torch.softmax(self.topic.weight.data, dim=1)
+        return topic_distribution
+
+    def get_topic_word_logit(self):
+        """topic x V.
+        Return the logit instead of probability distribution
+        """
+        return self.topic.weight
+
+
+class NTM(nn.Module):
+    def __init__(self, hidden_size, topic_size, vocab_size, device):
+        super(NTM, self).__init__()
+        self.hidden = Sequential(
+            Linear(vocab_size, hidden_size),
+            nn.LeakyReLU()
+        )
+        init.xavier_normal_(self.hidden[0].weight)
+        init.normal_(self.hidden[0].bias)
+
+        self.normal = NormalParameter(hidden_size, topic_size, device)
+        self.h_to_z = Identity()
+        self.topics = NTMTopics(topic_size, vocab_size)
+        self.softmax = nn.Softmax(dim=1)
+        self.device = device
+
+    def forward(self, x):
+        h_1 = self.hidden(x)
+        mu, log_sigma = self.normal(h_1)
+        kld = kld_normal(mu, log_sigma)
+
+        h_2 = torch.zeros_like(mu).normal_() * torch.exp(log_sigma) + mu
+        z = self.h_to_z(h_2)
+        log_prob = self.topics(z)
+        rec_loss = - (log_prob * x).sum(dim=-1)
+
+        minus_elbo = rec_loss + kld
+        return {
+            'ntm_loss': minus_elbo,
+            'minus_elbo': minus_elbo,
+            'rec_loss': rec_loss,
+            'kld': kld,
+            'h': h_2
+        }
+
+    def get_topics(self):
+        return self.topics.get_topics()
+
+    def get_topic_distribution(self, x, stage):
+        h = self.hidden(x)
+        mu, log_sigma = self.normal(h)
+        # observe_mu = mu.detach().to('cpu').numpy()
+        # observe_sigma = torch.exp(log_sigma).detach().to('cpu').numpy()
+        if stage == 'inference':
             z = mu
-            prob += self.softmax(z)
+        else:
+            z = torch.zeros_like(mu).normal_() * torch.exp(log_sigma) + mu
+        prob = self.softmax(z)
         return prob
 
 
@@ -104,12 +179,13 @@ def topic_embedding_weighted_penalty(embedding_weight, topic_word_logit, eps=1e-
     return -(s * nw).sum()  # minus for minimization
 
 
-class Topics(nn.Module):
+class NTMTopics(nn.Module):
     def __init__(self, k, vocab_size, bias=False):
-        super(Topics, self).__init__()
+        super(NTMTopics, self).__init__()
         self.k = k
         self.vocab_size = vocab_size
         self.topic = nn.Linear(k, vocab_size, bias=bias)
+        init.xavier_normal_(self.topic.weight)
 
     def forward(self, logit):
         # return the log_prob of vocab distribution
@@ -135,14 +211,14 @@ class NormalParameter(nn.Module):
         self.device = device
         self.reset_parameters()
 
-    def forward(self, h, n_sample):
-        if n_sample == 0:
-            return self.mu(h), torch.FloatTensor([0]).to(self.device)
+    def forward(self, h):
         return self.mu(h), self.log_sigma(h)
 
     def reset_parameters(self):
-        init.zeros_(self.log_sigma.weight)
-        init.zeros_(self.log_sigma.bias)
+        init.xavier_normal_(self.mu.weight)
+        init.xavier_normal_(self.log_sigma.weight)
+        init.normal_(self.mu.bias)
+        init.normal_(self.log_sigma.bias)
 
 
 class Identity(nn.Module):

@@ -1,7 +1,7 @@
 import torch
 from torch import diag, ones
 from torch.nn import Module
-from ntm import NTM
+from ntm import NTM, RevisedNTM
 from torch import optim
 import numpy as np
 import os
@@ -14,22 +14,27 @@ from sklearn.neighbors import KNeighborsClassifier
 from torch.utils.data import DataLoader, Dataset
 
 
-class ContrastiveNTM(Module):
-    def __init__(self, hidden_size, topic_number, vocab_size, device, tau):
-        super(ContrastiveNTM, self).__init__()
+class TopicAwareNTM(Module):
+    def __init__(self, hidden_size, topic_number, vocab_size, device, tau, ntm):
+        super(TopicAwareNTM, self).__init__()
         self.device = device
-        self.ntm = NTM(hidden_size, topic_number, vocab_size, device).to(device)
+        if ntm == 'ntm':
+            self.ntm = NTM(hidden_size, topic_number, vocab_size, device).to(device)
+        elif ntm == 'rntm':
+            self.ntm = RevisedNTM(hidden_size, topic_number, vocab_size, device).to(device)
+        else:
+            raise ValueError('')
         self.tau = tau
         self.topic_number = topic_number
 
-    def forward(self, origin_feature, nnlm_representation, same_class_mat, sample_size):
+    def forward(self, origin_feature, nnlm_representation, same_class_mat):
         # ntm loss
         origin_feature = origin_feature.to(self.device)
         nnlm_representation = nnlm_representation.to(self.device)
         same_class_mat = same_class_mat.to(self.device)
 
-        output = self.ntm(origin_feature, sample_size)
-        ntm_loss, z = output['ntm_loss'], output['z']
+        output = self.ntm(origin_feature)
+        ntm_loss, h = output['ntm_loss'], output['h']
 
         # topic similarity loss
         topic_word_distribution = self.ntm.topics.get_topics()
@@ -42,7 +47,7 @@ class ContrastiveNTM(Module):
         # output['topic_word_loss'] = torch.FloatTensor(0)
 
         # similarity loss
-        doc_topic_distribution = torch.softmax(z, dim=1)
+        doc_topic_distribution = torch.softmax(h, dim=1)
         doc_topic_similarity = self.pairwise_similarity(doc_topic_distribution, doc_topic_distribution)
         semantic_similarity = self.pairwise_similarity(nnlm_representation, nnlm_representation)
         difference = (semantic_similarity-doc_topic_similarity)
@@ -103,10 +108,9 @@ def load_data(read_from_cache, vocab_size_ntm):
 
 
 def train(batch_size, hidden_size, topic_number, learning_rate, vocab_size, epoch_number, topic_coefficient,
-          contrastive_coefficient, similarity_coefficient, ntm_coefficient, device, tau, read_from_cache):
+          contrastive_coefficient, similarity_coefficient, ntm_coefficient, device, tau, model_name, read_from_cache):
     data = load_data(read_from_cache, vocab_size)
     performance_list = list()
-    sample_size = args['sample_size']
     logger.info('topic number: {}, vocab size: {}, epoch number: {}'.format(topic_number, vocab_size, epoch_number))
     for i in range(5):
         # print('iter: {}'.format(i))
@@ -118,34 +122,52 @@ def train(batch_size, hidden_size, topic_number, learning_rate, vocab_size, epoc
         train_dataset, test_dataset = dataset_format(train_dataset), dataset_format(test_dataset)
         training_data = EHRDataset(train_dataset)
         train_dataloader = DataLoader(training_data, batch_size=batch_size, shuffle=True, collate_fn=collate_fn)
-        model = ContrastiveNTM(hidden_size, topic_number, vocab_size, device, tau)
+        model = TopicAwareNTM(hidden_size, topic_number, vocab_size, device, tau, model_name)
         optimizer = optim.Adam(model.parameters(), lr=learning_rate)
-
+        # train_feature = torch.FloatTensor(np.array(train_dataset[0])).to(device)
+        # train_representation = model.ntm.get_topic_distribution(train_feature, 'inference').detach().to(
+        #     'cpu').numpy()
         for epoch in range(epoch_number):
             epoch_loss = list()
             for batch_data in train_dataloader:
                 feature, representation, _, same_class_mat = batch_data
                 optimizer.zero_grad()
-                output = model(feature, representation, same_class_mat, sample_size)
+                output = model(feature, representation, same_class_mat)
 
                 contrastive_loss = output['contrastive_loss'].mean()
                 similarity_loss = output['similarity_loss'].mean()
                 ntm_loss = output['ntm_loss'].mean()
                 topic_word_loss = output['topic_word_loss'].mean()
-                # loss_sum = contrastive_loss.detach() + similarity_loss.detach() + ntm_loss.detach()
-                # loss = contrastive_loss * loss_sum * contrastive_coefficient / contrastive_loss.detach() + \
-                #     similarity_loss * loss_sum * similarity_coefficient / similarity_loss.detach() + \
-                #     ntm_loss * loss_sum * ntm_coefficient / ntm_loss.detach()
-                # print('loss: {}, ntm loss: {}, similarity loss: {}, contrastive loss: {}'.format(
-                #     loss.item(), ntm_loss.item(), similarity_loss.item(), contrastive_loss.item()
-                # ))
-                # loss = ntm_loss
+
                 loss = ntm_loss * ntm_coefficient + similarity_loss * similarity_coefficient + \
                     contrastive_loss * contrastive_coefficient + topic_word_loss * topic_coefficient
                 loss.backward()
+                torch.nn.utils.clip_grad_norm_(model.parameters(), args['clip'])
                 optimizer.step()
                 epoch_loss.append(loss.mean().detach().to('cpu').numpy())
-            # logger.info('epoch: {}, average loss: {}'.format(epoch, np.average(epoch_loss)))
+
+            # if epoch % 30 == 0:
+            #     if args['classify_model'] == 'knn':
+            #         classify_model = KNeighborsClassifier(n_neighbors=3)
+            #     elif args['classify_model'] == 'nn':
+            #         classify_model = MLPClassifier(hidden_layer_sizes=(), max_iter=6000)
+            #     elif args['classify_model'] == 'hnn':
+            #         classify_model = MLPClassifier(hidden_layer_sizes=(10,), max_iter=6000)
+            #     else:
+            #         raise ValueError('')
+            #     train_feature = torch.FloatTensor(np.array(train_dataset[0])).to(device)
+            #     test_feature = torch.FloatTensor(np.array(test_dataset[0])).to(device)
+            #     train_representation = model.ntm.get_topic_distribution(train_feature, 'inference').detach().to(
+            #         'cpu').numpy()
+            #     test_representation = model.ntm.get_topic_distribution(test_feature, 'inference').detach().to(
+            #         'cpu').numpy()
+            #     classify_model.fit(train_representation, train_dataset[2])
+            #     prediction = classify_model.predict_proba(test_representation)
+            #     performance = evaluation(prediction, test_dataset[2])
+            #     # print('iter {}, accuracy: {}'.format(i, accuracy))
+            #     performance_list.append(performance)
+            #     logger.info('epoch: {}, fold: {}, accuracy: {}'.format(epoch, i + 1, performance['accuracy']))
+            #     logger.info('epoch: {}, average loss: {}'.format(epoch, np.average(epoch_loss)))
 
         if args['classify_model'] == 'knn':
             classify_model = KNeighborsClassifier(n_neighbors=3)
@@ -157,10 +179,8 @@ def train(batch_size, hidden_size, topic_number, learning_rate, vocab_size, epoc
             raise ValueError('')
         train_feature = torch.FloatTensor(np.array(train_dataset[0])).to(device)
         test_feature = torch.FloatTensor(np.array(test_dataset[0])).to(device)
-        train_representation = model.ntm.get_topic_distribution(train_feature, sample_size, 'inference')\
-            .detach().to('cpu').numpy()
-        test_representation = model.ntm.get_topic_distribution(test_feature, sample_size, 'inference')\
-            .detach().to('cpu').numpy()
+        train_representation = model.ntm.get_topic_distribution(train_feature, 'inference').detach().to('cpu').numpy()
+        test_representation = model.ntm.get_topic_distribution(test_feature, 'inference').detach().to('cpu').numpy()
         classify_model.fit(train_representation, train_dataset[2])
         prediction = classify_model.predict_proba(test_representation)
         performance = evaluation(prediction, test_dataset[2])
@@ -216,6 +236,7 @@ def main(args_):
     topic_coefficient = args_['topic_coefficient']
     ntm_coefficient = args_['ntm_coefficient']
     device = args_['device']
+    model = args_['model']
     tau = args_['tau']
     read_from_cache = args_['read_from_cache']
 
@@ -224,8 +245,10 @@ def main(args_):
 
     # print('topic number: {}, epoch number: {}, vocab size: {}'.
     #       format(topic_number_ntm, epoch_number, vocab_size_ntm))
+    # device = 'cuda:4'
+    # for contrastive_coefficient in (0, 0, 0, 0, 0, 0):
     train(batch_size, hidden_size_ntm, topic_number_ntm, learning_rate, vocab_size_ntm, epoch_number, topic_coefficient,
-          contrastive_coefficient, similarity_coefficient, ntm_coefficient, device, tau, read_from_cache)
+          contrastive_coefficient, similarity_coefficient, ntm_coefficient, device, tau, model, read_from_cache)
 
 
 if __name__ == '__main__':

@@ -3,7 +3,8 @@ import re
 import argparse
 import logging
 
-device = 'cuda:4'
+device = 'cuda:3'
+model = 'rntm'
 vocab_size_lda = 3000
 read_from_cache = False
 topic_number_lda = 10
@@ -12,18 +13,20 @@ topic_number_ntm = 20
 hidden_size_ntm = 128
 batch_size = 128
 learning_rate = 0.001
-epoch_number = 300
-similarity_coefficient = 0
+epoch_number = 1000
+similarity_coefficient = 0.1
 ntm_coefficient = 0.9
-topic_coefficient = 0.1
+topic_coefficient = 0
 contrastive_coefficient = 0
 tau = 1
 classify_model = 'nn'
-sample_size = 1
 process_name = 'entm'
+clip = 0.8
 
 parser = argparse.ArgumentParser(description='')
 parser.add_argument("--device", default=device, type=str, help="")
+parser.add_argument("--clip", default=clip, type=float, help="")
+parser.add_argument("--model", default=model, type=str, help="")
 parser.add_argument("--classify_model", default=classify_model, type=str, help="")
 parser.add_argument("--vocab_size_lda", default=vocab_size_lda, type=int, help="")
 parser.add_argument("--topic_number_lda", default=topic_number_lda, type=int, help="")
@@ -40,7 +43,6 @@ parser.add_argument("--topic_coefficient", default=topic_coefficient, type=float
 parser.add_argument("--tau", default=tau, type=int, help="")
 parser.add_argument("--process_name", default=process_name, type=str, help="")
 parser.add_argument("--read_from_cache", default=read_from_cache, type=bool, help="")
-parser.add_argument("--sample_size", default=sample_size, type=int, help="")
 args = vars(parser.parse_args())
 
 log_file_name = os.path.abspath('./log_{}.txt'.format(process_name))
