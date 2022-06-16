@@ -3,30 +3,35 @@ import re
 import argparse
 import logging
 
-device = 'cuda:3'
+device = 'cuda:0'
 model = 'rntm'
 vocab_size_lda = 3000
-read_from_cache = False
+read_from_cache = True
 topic_number_lda = 10
 vocab_size_ntm = 10000
 topic_number_ntm = 20
 hidden_size_ntm = 128
 batch_size = 128
-learning_rate = 0.001
+learning_rate = 0.0002
 epoch_number = 1000
-similarity_coefficient = 0.1
+similarity_coefficient = 0
 ntm_coefficient = 0.9
-topic_coefficient = 0
+topic_coefficient = 0.1
 contrastive_coefficient = 0
 tau = 1
 classify_model = 'nn'
 process_name = 'entm'
 clip = 0.8
+diagnosis_size = 50
+dataset_name = 'mimic-iii'  # mimic-iii hzsph
+print('dataset name: {}'.format(dataset_name))
 
 parser = argparse.ArgumentParser(description='')
 parser.add_argument("--device", default=device, type=str, help="")
 parser.add_argument("--clip", default=clip, type=float, help="")
 parser.add_argument("--model", default=model, type=str, help="")
+parser.add_argument("--diagnosis_size", default=diagnosis_size, type=float, help="")
+parser.add_argument("--dataset_name", default=dataset_name, type=str, help="")
 parser.add_argument("--classify_model", default=classify_model, type=str, help="")
 parser.add_argument("--vocab_size_lda", default=vocab_size_lda, type=int, help="")
 parser.add_argument("--topic_number_lda", default=topic_number_lda, type=int, help="")
@@ -116,6 +121,15 @@ semi_structure_admission_path = os.path.abspath('./data/data_utf_8/半结构化�
 data_file_template = os.path.abspath('./data/origin_data/{}/{}.csv')
 save_folder = os.path.abspath('./data/data_utf_8')
 reorganize_first_emr_path = os.path.join(save_folder, 'first_emr_reorganize.csv')
-tokenize_data_save_path = os.path.join(save_folder, 'tokenize_data.pkl')
-word_count_path = os.path.join(save_folder, 'word_count.pkl')
-contrastive_ntm_data_cache = os.path.join(save_folder, 'contrastive_ntm_data_cache.pkl')
+classify_weight_csv = os.path.join(save_folder, 'classify_weight_{}.csv')
+topic_word_distribution_csv = os.path.join(save_folder, 'topic_word_distribution_{}.csv')
+
+mimic_iii_folder = os.path.abspath('../../MIMIC/MIMIC-III 1.4/')
+mimic_iii_note_path = os.path.join(mimic_iii_folder, 'NOTEEVENTS.csv')
+mimic_iii_diagnoses = os.path.join(mimic_iii_folder, 'DIAGNOSES_ICD.csv')
+mimic_iii_cache_0 = os.path.join(save_folder, 'mimic_iii_cache_0.pkl')
+mimic_iii_cache_1 = os.path.join(save_folder, 'mimic_iii_cache_1.pkl')
+mimic_iii_cache_2 = os.path.join(save_folder, 'mimic_iii_cache_2.pkl')
+mimic_iii_cache_3 = os.path.join(save_folder, 'mimic_iii_cache_3.pkl')
+
+hzsph_cache = os.path.join(save_folder, 'hzsph_cache.pkl')

@@ -1,46 +1,173 @@
-# coding=utf-8
+import random
+import numpy as np
 import os
+import torch
 import csv
+import pkuseg
+from config import logger, hzsph_cache, cn_CLS_token, diagnosis_map, device, topic_model_first_emr_parse_list, \
+    topic_model_admission_parse_list, cache_dir, save_folder, \
+    neural_network_first_emr_parse_list, neural_network_admission_parse_list, semi_structure_admission_path, \
+    emr_parse_file_path, reorganize_first_emr_path, data_file_template, integrate_file_name, parse_list, skip_word_set
+import pickle
 from itertools import islice
-from config import save_folder, data_file_template, emr_parse_file_path, integrate_file_name, \
-    reorganize_first_emr_path, semi_structure_admission_path, parse_list
+from transformers import BertModel, BertTokenizer
 
 
-def main():
-    re_save_data(data_file_template, save_folder, re_save=True)
-    data = reorganize_data(integrate_file_name, data_file_template)
-    # print('start first emr preprocessing')
-    first_emr_record = first_emr_record_reorganize(emr_parse_file_path, data, reorganize_first_emr_path)
-    # print('first emr preprocessing, accomplished')
-    # print('start admission emr preprocessing')
-    admission_data_dict = admission_record_structurize(data)
-    # print('admission emr preprocessing, accomplished')
-    save_admission_data_dict(admission_data_dict, semi_structure_admission_path)
+def hzsph_load_data(read_from_cache, vocab_size_ntm):
+    if read_from_cache and os.path.exists(hzsph_cache):
+        five_fold_data, word_index_map = pickle.load(open(hzsph_cache, 'rb'))
+    else:
+        word_index_map, reformat_data = hzsph_bag_of_word_reorganize(vocab_size_ntm)
+        embedding = hzsph_data_embedding()
+        index_list = [i for i in range(len(reformat_data))]
+        random.shuffle(index_list)
+        five_fold_feature = hzsph_five_fold_datasets(reformat_data, index_list)
+        five_fold_embedding = hzsph_five_fold_datasets(embedding, index_list)
+        five_fold_data = list()
+        for fold_feature, fold_embedding in zip(five_fold_feature, five_fold_embedding):
+            fold_info = list()
+            for item_feature, item_embedding in zip(fold_feature, fold_embedding):
+                assert item_feature[0] == item_embedding[0]
+                key, feature, diagnosis, embedding = \
+                    item_feature[0], item_feature[1], item_feature[2], item_embedding[1]
+                fold_info.append([key, feature, embedding, diagnosis])
+            five_fold_data.append(fold_info)
+        pickle.dump((five_fold_data, word_index_map), open(hzsph_cache, 'wb'))
+    logger.info('data loaded')
+    return five_fold_data, word_index_map
 
-    # reconstruct_data(admission_data_dict, first_emr_record)
+
+def hzsph_five_fold_datasets(data, shuffle_index_list):
+    """
+    五折交叉验证
+    """
+    data_list = []
+    for key in data:
+        single_data, diagnosis = data[key][0], data[key][1]
+        data_list.append([key, single_data, diagnosis])
+
+    shuffled_data_list = []
+    for index in shuffle_index_list:
+        shuffled_data_list.append(data_list[index])
+
+    fold_size = len(shuffled_data_list) // 5
+    shuffled_data = [
+        shuffled_data_list[0: fold_size],
+        shuffled_data_list[fold_size: fold_size * 2],
+        shuffled_data_list[fold_size * 2: fold_size * 3],
+        shuffled_data_list[fold_size * 3: fold_size * 4],
+        shuffled_data_list[fold_size * 4:],
+    ]
+    return shuffled_data
 
 
-def reconstruct_data(admission_data_dict, first_emr_record_dict, admission_parse_list, first_emr_parse_list):
+def hzsph_word_index_convert(data, vocab_size):
+    data_list = []
+    for key in data:
+        data_list.append([key, data[key][0], diagnosis_map[data[key][1]]])
+    content_list = [item[1] for item in data_list]
+    model = pkuseg.pkuseg(model_name='medicine')
+    # HanLP = hanlp.load(hanlp.pretrained.tok.CTB9_TOK_ELECTRA_SMALL)
+    # tokenize_data = HanLP(content_list)
+    tokenize_data = list()
+    for item in content_list:
+        tokenize_data.append(model.cut(item))
+    reformat_data = list()
+    for i in range(len(tokenize_data)):
+        reformat_data.append([data_list[i][0], tokenize_data[i], data_list[i][2]])
+
+    # len_count = [len(item[1]) for item in reformat_data]
+    # print('average token length: {}'.format(np.average(len_count)))
+    # print('max token length: {}'.format(np.max(len_count)))
+    # print('min token length: {}'.format(np.min(len_count)))
+
+    word_count_map = dict()
+    for item in reformat_data:
+        for word in item[1]:
+            if word in skip_word_set:
+                continue
+            if word not in word_count_map:
+                word_count_map[word] = 0
+            word_count_map[word] += 1
+
+    word_count_list = list()
+    for key in word_count_map:
+        word_count_list.append([key, word_count_map[key]])
+    word_count_list = sorted(word_count_list, key=lambda x: x[1], reverse=True)
+    valid_word = [word_count_list[i][0] for i in range(vocab_size-1)]
+
+    word_index_map = dict()
+    for item in valid_word:
+        word_index_map[item] = len(word_index_map)
+
+    tokenize_data = dict()
+    for item in reformat_data:
+        key, content, diagnosis = item
+        content_idx_list = np.zeros(vocab_size)
+        for word in content:
+            if word in word_index_map:
+                content_idx_list[word_index_map[word]] += 1
+            else:
+                content_idx_list[vocab_size-1] += 1
+        tokenize_data[key] = content_idx_list, diagnosis
+    return word_index_map, tokenize_data
+
+
+def hzsph_bag_of_word_reorganize(vocab_size):
+    admission_data_dict, first_emr_record_dict = hzsph_preliminary_load_data(read_from_cache=False)
+    data = hzsph_reconstruct_data(admission_data_dict, first_emr_record_dict, topic_model_admission_parse_list,
+                                  topic_model_first_emr_parse_list)
+    word_index_map, reformat_data = hzsph_word_index_convert(data, vocab_size)
+    return word_index_map, reformat_data
+
+
+def hzsph_data_embedding():
+    tokenizer = BertTokenizer.from_pretrained('hfl/chinese-macbert-base', cache_dir=cache_dir)
+    model = BertModel.from_pretrained('hfl/chinese-macbert-base', cache_dir=cache_dir).to(device)
+
+    admission_data_dict, first_emr_record_dict = hzsph_preliminary_load_data()
+    data = hzsph_reconstruct_data(admission_data_dict, first_emr_record_dict, neural_network_admission_parse_list,
+                                  neural_network_first_emr_parse_list)
+    embedding_data = dict()
+    length_list = []
+    for key in data:
+        info_str, diagnosis = data[key]
+        token = tokenizer(cn_CLS_token + ' ' + info_str)['input_ids']
+        # token_str = tokenizer.tokenize(cn_CLS_token + ' ' + info_str)
+        length_list.append(len(token))
+        if len(token) > 512:
+            token = token[:512]
+            print('{} input id len is larger than 512'.format(key))
+        embedding_data[key] = model(torch.LongTensor([token]).to(device))['last_hidden_state'][0][0].\
+            detach().cpu().numpy(), diagnosis_map[diagnosis]
+
+    print('average len {}'.format(np.average(length_list)))
+    print('max len {}'.format(np.max(length_list)))
+    print('min len {}'.format(np.min(length_list)))
+    return embedding_data
+
+
+def hzsph_reconstruct_data(admission_data_dict, first_emr_record_dict, admission_parse_list, first_emr_parse_list):
     data = dict()
     for key in admission_data_dict:
         if key not in first_emr_record_dict:
             # print('{} not in first emr record'.format(key))
             continue
-        admission_str = reconstruct_str(admission_parse_list, admission_data_dict[key])
-        first_emr_str = reconstruct_str(first_emr_parse_list, first_emr_record_dict[key][1])
+        admission_str = hzsph_reconstruct_str(admission_parse_list, admission_data_dict[key])
+        first_emr_str = hzsph_reconstruct_str(first_emr_parse_list, first_emr_record_dict[key][1])
         data[key] = first_emr_str + ' ; ' + admission_str, key.strip().split('_')[1]
     return data
 
 
-def load_data(read_from_cache=True):
-    data = reorganize_data(integrate_file_name, data_file_template, read_from_cache=read_from_cache)
-    first_emr_record = first_emr_record_reorganize(emr_parse_file_path, data, reorganize_first_emr_path)
-    admission_data_dict = admission_record_structurize(data)
-    save_admission_data_dict(admission_data_dict, semi_structure_admission_path)
+def hzsph_preliminary_load_data(read_from_cache=True):
+    data = hzsph_reorganize_data(integrate_file_name, data_file_template, read_from_cache=read_from_cache)
+    first_emr_record = hzsph_first_emr_record_reorganize(emr_parse_file_path, data, reorganize_first_emr_path)
+    admission_data_dict = hzsph_admission_record_structurize(data)
+    hzsph_save_admission_data_dict(admission_data_dict, semi_structure_admission_path)
     return admission_data_dict, first_emr_record
 
 
-def reconstruct_str(parse_order_list, info_dict):
+def hzsph_reconstruct_str(parse_order_list, info_dict):
     return_str = ''
     for item in parse_order_list:
         if item in info_dict:
@@ -48,7 +175,7 @@ def reconstruct_str(parse_order_list, info_dict):
     return return_str
 
 
-def read_emr_parse_file(file_path):
+def hzsph_read_emr_parse_file(file_path):
     structure_1, structure_2 = list(), list()
     with open(file_path, 'r', encoding='utf-8-sig') as f:
         csv_reader = csv.reader(f)
@@ -66,12 +193,12 @@ def read_emr_parse_file(file_path):
     return structure_1, structure_2
 
 
-def first_emr_record_reorganize(file_path, full_data, reorganize_file_path):
+def hzsph_first_emr_record_reorganize(file_path, full_data, reorganize_file_path):
     """
     EMR数据中，病程记录相对而言是结构化的非常好的，就目前而言看上去能够比较好的遵循
     """
 
-    structure_1, structure_2 = read_emr_parse_file(file_path)
+    structure_1, structure_2 = hzsph_read_emr_parse_file(file_path)
     data = list()
     data_dict = dict()
     for line in full_data:
@@ -80,7 +207,8 @@ def first_emr_record_reorganize(file_path, full_data, reorganize_file_path):
 
     for line in data:
         patient_id, doc_type, diagnosis, emr = line
-        structured_data, template_type, complete = _first_emr_structurize(patient_id, emr, structure_1, structure_2)
+        structured_data, template_type, complete = \
+            hzsph_first_emr_structurize(patient_id, emr, structure_1, structure_2)
         if complete:
             assert patient_id+'_'+diagnosis not in data_dict
             data_dict[patient_id+'_'+diagnosis] = doc_type, structured_data, template_type
@@ -97,7 +225,7 @@ def first_emr_record_reorganize(file_path, full_data, reorganize_file_path):
     return data_dict
 
 
-def _first_emr_structurize(patient_id, emr, structure_1, structure_2):
+def hzsph_first_emr_structurize(_, emr, structure_1, structure_2):
     # 首轮清洗，将其中的中医部分删除
     complete_flag = True
     emr_list = emr.split('\n')
@@ -187,7 +315,7 @@ def _first_emr_structurize(patient_id, emr, structure_1, structure_2):
     return structured_data, complete_flag, template_type
 
 
-def save_admission_data_dict(admission_data_dict, admission_path):
+def hzsph_save_admission_data_dict(admission_data_dict, admission_path):
     data_to_write = [['patient_id', '项目', '内容']]
     for patient_id in admission_data_dict:
         for key in admission_data_dict[patient_id]:
@@ -198,7 +326,7 @@ def save_admission_data_dict(admission_data_dict, admission_path):
         csv.writer(f).writerows(data_to_write)
 
 
-def admission_record_structurize(data):
+def hzsph_admission_record_structurize(data):
     admission_data_list = []
     admission_data_dict = dict()
 
@@ -206,8 +334,8 @@ def admission_record_structurize(data):
         if line[1] == '入院记录':
             admission_data_list.append(line)
     for line in admission_data_list:
-        personalized_parse_list = identify_parse_sequence(line[0], line[3], parse_list)
-        content_dict = content_format(line[0], line[3], personalized_parse_list)
+        personalized_parse_list = hzsph_identify_parse_sequence(line[0], line[3], parse_list)
+        content_dict = hzsph_content_format(line[0], line[3], personalized_parse_list)
         content_dict['诊断'] = line[2]
         # if line[0] in admission_data_dict:
         #     print('Duplicate')
@@ -219,8 +347,8 @@ def admission_record_structurize(data):
     return admission_data_dict
 
 
-def identify_parse_sequence(patient_id, data_str, sequential_split):
-    origin_emr = data_str
+def hzsph_identify_parse_sequence(_, data_str, sequential_split):
+    _ = data_str
     personalized_parse_list, match_dict, parse_map = [], dict(), dict()
     for item in sequential_split:
         parse_map[item[0]] = item
@@ -258,7 +386,7 @@ def identify_parse_sequence(patient_id, data_str, sequential_split):
     return personalized_parse_list
 
 
-def read_sequential_split_file(path):
+def hzsph_read_sequential_split_file(path):
     data_to_read = []
     with open(path, 'r', encoding='utf-8-sig') as f:
         csv_reader = csv.reader(f)
@@ -271,7 +399,7 @@ def read_sequential_split_file(path):
     return data_to_read
 
 
-def content_format(patient_id, data_str, sequential_split):
+def hzsph_content_format(_, data_str, sequential_split):
     # 假设顺序排布是固定的，可能有缺失但是不会有顺序变化
 
     data_dict = dict()
@@ -325,7 +453,7 @@ def content_format(patient_id, data_str, sequential_split):
     return data_dict
 
 
-def reorganize_data(file_path, file_path_template, read_from_cache=False):
+def hzsph_reorganize_data(file_path, file_path_template, read_from_cache=False):
     if read_from_cache is True and os.path.exists(file_path):
         data = []
         with open(file_path, 'r', encoding='utf-8-sig', newline='') as f:
@@ -354,7 +482,7 @@ def reorganize_data(file_path, file_path_template, read_from_cache=False):
     return data
 
 
-def re_save_data(file_path_template, save_, re_save=False):
+def hzsph_re_save_data(file_path_template, save_, re_save=False):
     folder_name_list = ['双相', '抑郁', '焦虑障碍']
     file_name_list = ['入院记录', '出院记录', '病程记录', '首次查房记录', '首次病程记录']
     for diagnosis in folder_name_list:
@@ -372,6 +500,20 @@ def re_save_data(file_path_template, save_, re_save=False):
             with open(write_path, 'w', encoding='utf-8-sig', newline='') as f:
                 csv.writer(f).writerows(data_to_rewrite)
     return True
+
+
+def main():
+    hzsph_re_save_data(data_file_template, save_folder, re_save=True)
+    data = hzsph_reorganize_data(integrate_file_name, data_file_template)
+    # print('start first emr preprocessing')
+    _ = hzsph_first_emr_record_reorganize(emr_parse_file_path, data, reorganize_first_emr_path)
+    # print('first emr preprocessing, accomplished')
+    # print('start admission emr preprocessing')
+    admission_data_dict = hzsph_admission_record_structurize(data)
+    # print('admission emr preprocessing, accomplished')
+    hzsph_save_admission_data_dict(admission_data_dict, semi_structure_admission_path)
+
+    # reconstruct_data(admission_data_dict, first_emr_record)
 
 
 if __name__ == '__main__':

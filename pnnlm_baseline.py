@@ -1,8 +1,6 @@
 import numpy as np
 from sklearn.neural_network import MLPClassifier
-from util import five_fold_datasets, dataset_format, evaluation, data_embedding
-from config import tokenize_data_save_path
-import random
+from util import evaluation, dataset_selection, dataset_format
 
 
 def train(data):
@@ -19,19 +17,21 @@ def train(data):
             hidden_layer_sizes=(),
             max_iter=2000
         )
-        mlp_model.fit(train_dataset[0], train_dataset[1])
-        prediction = mlp_model.predict_proba(test_dataset[0])
-        accuracy = evaluation(prediction, test_dataset[1])
-        print('iter {}, accuracy: {}'.format(i, accuracy))
-        accuracy_list.append(accuracy)
+        mlp_model.fit(train_dataset[1], train_dataset[2])
+        prediction = mlp_model.predict_proba(test_dataset[1])
+        performance = evaluation(prediction, test_dataset[2])
+        print('iter {}, performance: {}'.format(i, performance))
+        accuracy_list.append(performance['accuracy'])
     print('accuracy: {}'.format(np.average(accuracy_list)))
 
 
 def main():
-    embedding = data_embedding(tokenize_data_save_path, True)
-    index_list = [i for i in range(len(embedding))]
-    random.shuffle(index_list)
-    five_fold_data = five_fold_datasets(embedding, index_list)
+    vocab_size = 10000
+    diagnosis_size = 50
+    read_from_cache = True
+    dataset_name = 'mimic-iii'  # mimic-iii hzsph
+    print('dataset name: {}'.format(dataset_name))
+    five_fold_data, word_index_map = dataset_selection(dataset_name, vocab_size, diagnosis_size, read_from_cache)
     train(five_fold_data)
 
 

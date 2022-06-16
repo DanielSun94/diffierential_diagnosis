@@ -2,16 +2,8 @@ import torch
 from torch import diag, ones
 from torch.nn import Module
 from ntm import NTM, RevisedNTM
-from torch import optim
 import numpy as np
-import os
-import pickle
-import random
-from config import tokenize_data_save_path, contrastive_ntm_data_cache, args, logger
-from util import five_fold_datasets, bag_of_word_reorganize, dataset_format, evaluation, data_embedding
-from sklearn.neural_network import MLPClassifier
-from sklearn.neighbors import KNeighborsClassifier
-from torch.utils.data import DataLoader, Dataset
+from torch.utils.data import Dataset
 
 
 class TopicAwareNTM(Module):
@@ -82,116 +74,6 @@ class TopicAwareNTM(Module):
         return similarity
 
 
-def load_data(read_from_cache, vocab_size_ntm):
-    if read_from_cache and os.path.exists(contrastive_ntm_data_cache):
-        data = pickle.load(open(contrastive_ntm_data_cache, 'rb'))
-    else:
-        word_index_map, reformat_data = bag_of_word_reorganize(vocab_size_ntm)
-        embedding = data_embedding(tokenize_data_save_path, overwrite=False)
-        index_list = [i for i in range(len(reformat_data))]
-        random.shuffle(index_list)
-        five_fold_feature = five_fold_datasets(reformat_data, index_list)
-        five_fold_embedding = five_fold_datasets(embedding, index_list)
-        five_fold_data = list()
-        for fold_feature, fold_embedding in zip(five_fold_feature, five_fold_embedding):
-            fold_info = list()
-            for item_feature, item_embedding in zip(fold_feature, fold_embedding):
-                assert item_feature[0] == item_embedding[0]
-                key, feature, diagnosis, embedding = \
-                    item_feature[0], item_feature[1], item_feature[2], item_embedding[1]
-                fold_info.append([key, feature, embedding, diagnosis])
-            five_fold_data.append(fold_info)
-        pickle.dump(five_fold_data, open(contrastive_ntm_data_cache, 'wb'))
-        data = five_fold_data
-    logger.info('data loaded')
-    return data
-
-
-def train(batch_size, hidden_size, topic_number, learning_rate, vocab_size, epoch_number, topic_coefficient,
-          contrastive_coefficient, similarity_coefficient, ntm_coefficient, device, tau, model_name, read_from_cache):
-    data = load_data(read_from_cache, vocab_size)
-    performance_list = list()
-    logger.info('topic number: {}, vocab size: {}, epoch number: {}'.format(topic_number, vocab_size, epoch_number))
-    for i in range(5):
-        # print('iter: {}'.format(i))
-        test_dataset, train_dataset = data[i], []
-        for j in range(5):
-            if i != j:
-                for item in data[j]:
-                    train_dataset.append(item)
-        train_dataset, test_dataset = dataset_format(train_dataset), dataset_format(test_dataset)
-        training_data = EHRDataset(train_dataset)
-        train_dataloader = DataLoader(training_data, batch_size=batch_size, shuffle=True, collate_fn=collate_fn)
-        model = TopicAwareNTM(hidden_size, topic_number, vocab_size, device, tau, model_name)
-        optimizer = optim.Adam(model.parameters(), lr=learning_rate)
-        # train_feature = torch.FloatTensor(np.array(train_dataset[0])).to(device)
-        # train_representation = model.ntm.get_topic_distribution(train_feature, 'inference').detach().to(
-        #     'cpu').numpy()
-        for epoch in range(epoch_number):
-            epoch_loss = list()
-            for batch_data in train_dataloader:
-                feature, representation, _, same_class_mat = batch_data
-                optimizer.zero_grad()
-                output = model(feature, representation, same_class_mat)
-
-                contrastive_loss = output['contrastive_loss'].mean()
-                similarity_loss = output['similarity_loss'].mean()
-                ntm_loss = output['ntm_loss'].mean()
-                topic_word_loss = output['topic_word_loss'].mean()
-
-                loss = ntm_loss * ntm_coefficient + similarity_loss * similarity_coefficient + \
-                    contrastive_loss * contrastive_coefficient + topic_word_loss * topic_coefficient
-                loss.backward()
-                torch.nn.utils.clip_grad_norm_(model.parameters(), args['clip'])
-                optimizer.step()
-                epoch_loss.append(loss.mean().detach().to('cpu').numpy())
-
-            # if epoch % 30 == 0:
-            #     if args['classify_model'] == 'knn':
-            #         classify_model = KNeighborsClassifier(n_neighbors=3)
-            #     elif args['classify_model'] == 'nn':
-            #         classify_model = MLPClassifier(hidden_layer_sizes=(), max_iter=6000)
-            #     elif args['classify_model'] == 'hnn':
-            #         classify_model = MLPClassifier(hidden_layer_sizes=(10,), max_iter=6000)
-            #     else:
-            #         raise ValueError('')
-            #     train_feature = torch.FloatTensor(np.array(train_dataset[0])).to(device)
-            #     test_feature = torch.FloatTensor(np.array(test_dataset[0])).to(device)
-            #     train_representation = model.ntm.get_topic_distribution(train_feature, 'inference').detach().to(
-            #         'cpu').numpy()
-            #     test_representation = model.ntm.get_topic_distribution(test_feature, 'inference').detach().to(
-            #         'cpu').numpy()
-            #     classify_model.fit(train_representation, train_dataset[2])
-            #     prediction = classify_model.predict_proba(test_representation)
-            #     performance = evaluation(prediction, test_dataset[2])
-            #     # print('iter {}, accuracy: {}'.format(i, accuracy))
-            #     performance_list.append(performance)
-            #     logger.info('epoch: {}, fold: {}, accuracy: {}'.format(epoch, i + 1, performance['accuracy']))
-            #     logger.info('epoch: {}, average loss: {}'.format(epoch, np.average(epoch_loss)))
-
-        if args['classify_model'] == 'knn':
-            classify_model = KNeighborsClassifier(n_neighbors=3)
-        elif args['classify_model'] == 'nn':
-            classify_model = MLPClassifier(hidden_layer_sizes=(), max_iter=6000)
-        elif args['classify_model'] == 'hnn':
-            classify_model = MLPClassifier(hidden_layer_sizes=(10, ), max_iter=6000)
-        else:
-            raise ValueError('')
-        train_feature = torch.FloatTensor(np.array(train_dataset[0])).to(device)
-        test_feature = torch.FloatTensor(np.array(test_dataset[0])).to(device)
-        train_representation = model.ntm.get_topic_distribution(train_feature, 'inference').detach().to('cpu').numpy()
-        test_representation = model.ntm.get_topic_distribution(test_feature, 'inference').detach().to('cpu').numpy()
-        classify_model.fit(train_representation, train_dataset[2])
-        prediction = classify_model.predict_proba(test_representation)
-        performance = evaluation(prediction, test_dataset[2])
-        # print('iter {}, accuracy: {}'.format(i, accuracy))
-        performance_list.append(performance)
-        logger.info('fold: {}, accuracy: {}'.format(i+1, performance['accuracy']))
-    for key in performance_list[0]:
-        score_list = [item[key] for item in performance_list]
-        logger.info('average {}: {}'.format(key, np.average(score_list)))
-
-
 class EHRDataset(Dataset):
     def __init__(self, dataset):
         self.feature = dataset[0]
@@ -222,36 +104,3 @@ def collate_fn(batch):
     representation = torch.FloatTensor(np.array([item[1] for item in batch]))
     label = torch.FloatTensor(np.array([item[2] for item in batch]))
     return feature, representation, label, same_class_index
-
-
-def main(args_):
-    batch_size = args_['batch_size']
-    hidden_size_ntm = args_['hidden_size_ntm']
-    topic_number_ntm = args_['topic_number_ntm']
-    learning_rate = args_['learning_rate']
-    vocab_size_ntm = args_['vocab_size_ntm']
-    epoch_number = args_['epoch_number']
-    contrastive_coefficient = args_['contrastive_coefficient']
-    similarity_coefficient = args_['similarity_coefficient']
-    topic_coefficient = args_['topic_coefficient']
-    ntm_coefficient = args_['ntm_coefficient']
-    device = args_['device']
-    model = args_['model']
-    tau = args_['tau']
-    read_from_cache = args_['read_from_cache']
-
-    for key in args_:
-        logger.info('{}: {}'.format(key, args_[key]))
-
-    # print('topic number: {}, epoch number: {}, vocab size: {}'.
-    #       format(topic_number_ntm, epoch_number, vocab_size_ntm))
-    # device = 'cuda:4'
-    # for contrastive_coefficient in (0, 0, 0, 0, 0, 0):
-    train(batch_size, hidden_size_ntm, topic_number_ntm, learning_rate, vocab_size_ntm, epoch_number, topic_coefficient,
-          contrastive_coefficient, similarity_coefficient, ntm_coefficient, device, tau, model, read_from_cache)
-
-
-if __name__ == '__main__':
-    main(args)
-
-
