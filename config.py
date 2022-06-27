@@ -5,30 +5,40 @@ import logging
 
 device = 'cuda:0'
 model = 'rntm'
+test_set_num = 4
 vocab_size_lda = 3000
 read_from_cache = True
 topic_number_lda = 10
 vocab_size_ntm = 10000
 topic_number_ntm = 20
 hidden_size_ntm = 128
-batch_size = 128
-learning_rate = 0.0002
+learning_rate = 0.001
 epoch_number = 1000
 similarity_coefficient = 0
-ntm_coefficient = 0.9
-topic_coefficient = 0.1
+ntm_coefficient = 1
+topic_coefficient = 0
 contrastive_coefficient = 0
 tau = 1
 classify_model = 'nn'
 process_name = 'entm'
 clip = 0.8
-diagnosis_size = 50
-dataset_name = 'mimic-iii'  # mimic-iii hzsph
+diagnosis_size = 10
+repeat_time = 5
+experiment_type = 'hyperparameter'
+dataset_name = 'hzsph'  # mimic-iii hzsph
+if dataset_name == 'mimic-iii':
+    batch_size = 128
+elif dataset_name == 'hzsph':
+    batch_size = 128
+else:
+    raise ValueError('')
 print('dataset name: {}'.format(dataset_name))
 
 parser = argparse.ArgumentParser(description='')
 parser.add_argument("--device", default=device, type=str, help="")
 parser.add_argument("--clip", default=clip, type=float, help="")
+parser.add_argument("--experiment_type", default=experiment_type, type=str, help="")
+parser.add_argument("--test_set_num", default=test_set_num, type=float, help="")
 parser.add_argument("--model", default=model, type=str, help="")
 parser.add_argument("--diagnosis_size", default=diagnosis_size, type=float, help="")
 parser.add_argument("--dataset_name", default=dataset_name, type=str, help="")
@@ -48,6 +58,7 @@ parser.add_argument("--topic_coefficient", default=topic_coefficient, type=float
 parser.add_argument("--tau", default=tau, type=int, help="")
 parser.add_argument("--process_name", default=process_name, type=str, help="")
 parser.add_argument("--read_from_cache", default=read_from_cache, type=bool, help="")
+parser.add_argument("--repeat_time", default=repeat_time, type=str, help="")
 args = vars(parser.parse_args())
 
 log_file_name = os.path.abspath('./log_{}.txt'.format(process_name))
@@ -115,14 +126,14 @@ topic_model_admission_parse_list = ['主诉', '现病史', '既往史', '个人�
 topic_model_first_emr_parse_list = ['1、', '2、', '3、', '4、', '5、', '6、']
 neural_network_admission_parse_list = ['现病史']
 neural_network_first_emr_parse_list = []
+
+# data read path and cache
+save_folder = os.path.abspath('./data/data_utf_8')
 integrate_file_name = os.path.abspath('./data/data_utf_8/integrate_data.csv')
 emr_parse_file_path = os.path.abspath('./data/data_utf_8/病程记录解析序列.csv')
 semi_structure_admission_path = os.path.abspath('./data/data_utf_8/半结构化入院记录.csv')
-data_file_template = os.path.abspath('./data/origin_data/{}/{}.csv')
-save_folder = os.path.abspath('./data/data_utf_8')
+hzsph_data_file_template = os.path.abspath('./data/origin_data/{}/{}.csv')
 reorganize_first_emr_path = os.path.join(save_folder, 'first_emr_reorganize.csv')
-classify_weight_csv = os.path.join(save_folder, 'classify_weight_{}.csv')
-topic_word_distribution_csv = os.path.join(save_folder, 'topic_word_distribution_{}.csv')
 
 mimic_iii_folder = os.path.abspath('../../MIMIC/MIMIC-III 1.4/')
 mimic_iii_note_path = os.path.join(mimic_iii_folder, 'NOTEEVENTS.csv')
@@ -133,3 +144,10 @@ mimic_iii_cache_2 = os.path.join(save_folder, 'mimic_iii_cache_2.pkl')
 mimic_iii_cache_3 = os.path.join(save_folder, 'mimic_iii_cache_3.pkl')
 
 hzsph_cache = os.path.join(save_folder, 'hzsph_cache.pkl')
+
+# result write paths
+classify_weight_csv = os.path.join(save_folder, 'model_info_classify_weight_{}_{}.csv')
+topic_word_distribution_csv = os.path.join(save_folder, 'model_info_topic_word_distribution_{}_{}.csv')
+performance_tendency_csv = os.path.join(save_folder, 'performance_tendency_{}_{}.csv')
+representation_pkl = os.path.join(save_folder, 'representation_{}_{}.csv')
+perplexity_csv = os.path.join(save_folder, 'perplexity_{}_{}.csv')

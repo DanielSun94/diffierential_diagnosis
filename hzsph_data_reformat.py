@@ -7,7 +7,8 @@ import pkuseg
 from config import logger, hzsph_cache, cn_CLS_token, diagnosis_map, device, topic_model_first_emr_parse_list, \
     topic_model_admission_parse_list, cache_dir, save_folder, \
     neural_network_first_emr_parse_list, neural_network_admission_parse_list, semi_structure_admission_path, \
-    emr_parse_file_path, reorganize_first_emr_path, data_file_template, integrate_file_name, parse_list, skip_word_set
+    emr_parse_file_path, reorganize_first_emr_path, hzsph_data_file_template, integrate_file_name, parse_list, \
+    skip_word_set
 import pickle
 from itertools import islice
 from transformers import BertModel, BertTokenizer
@@ -160,7 +161,7 @@ def hzsph_reconstruct_data(admission_data_dict, first_emr_record_dict, admission
 
 
 def hzsph_preliminary_load_data(read_from_cache=True):
-    data = hzsph_reorganize_data(integrate_file_name, data_file_template, read_from_cache=read_from_cache)
+    data = hzsph_reorganize_data(integrate_file_name, hzsph_data_file_template, read_from_cache=read_from_cache)
     first_emr_record = hzsph_first_emr_record_reorganize(emr_parse_file_path, data, reorganize_first_emr_path)
     admission_data_dict = hzsph_admission_record_structurize(data)
     hzsph_save_admission_data_dict(admission_data_dict, semi_structure_admission_path)
@@ -503,8 +504,8 @@ def hzsph_re_save_data(file_path_template, save_, re_save=False):
 
 
 def main():
-    hzsph_re_save_data(data_file_template, save_folder, re_save=True)
-    data = hzsph_reorganize_data(integrate_file_name, data_file_template)
+    hzsph_re_save_data(hzsph_data_file_template, save_folder, re_save=True)
+    data = hzsph_reorganize_data(integrate_file_name, hzsph_data_file_template)
     # print('start first emr preprocessing')
     _ = hzsph_first_emr_record_reorganize(emr_parse_file_path, data, reorganize_first_emr_path)
     # print('first emr preprocessing, accomplished')

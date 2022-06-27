@@ -1,5 +1,6 @@
 import numpy as np
 from util import evaluation, dataset_selection, dataset_format
+from config import args
 from sklearn.neural_network import MLPClassifier
 from sklearn.decomposition import LatentDirichletAllocation
 
@@ -29,13 +30,15 @@ def train(topic_number, vocab_size, dataset_name, diagnosis_size, read_from_cach
 
 
 def main():
-    read_from_cache = True
-    dataset_name = 'mimic-iii'  # mimic-iii hzsph
+    diagnosis_size = args['diagnosis_size']
+    vocab_size_ntm = args['vocab_size_ntm']
+    read_from_cache = args['read_from_cache']
+    dataset_name = args['dataset_name']
     print('dataset name: {}'.format(dataset_name))
     for topic_num in 20, :
-        for vocab_size in 10000, :
+        for vocab_size in vocab_size_ntm, :
             print('topic number: {}, vocab_number: {}'.format(topic_num, vocab_size))
-            train(topic_num, vocab_size, dataset_name, 50, read_from_cache)
+            train(topic_num, vocab_size, dataset_name, diagnosis_size, read_from_cache)
 
 
 if __name__ == '__main__':

@@ -3,16 +3,19 @@ import os
 import pickle
 from itertools import islice
 from transformers import DebertaTokenizer, DebertaModel
+# from transformers import LongformerModel, LongformerTokenizer
 import numpy as np
 import torch
 import random
 from config import mimic_iii_note_path, mimic_iii_diagnoses, mimic_iii_cache_0, device, \
-    mimic_iii_cache_2, mimic_iii_cache_1, mimic_iii_cache_3
+    mimic_iii_cache_2, mimic_iii_cache_1, mimic_iii_cache_3, args, cache_dir
 from sklearn.feature_extraction.text import TfidfVectorizer
 
 
-model = DebertaModel.from_pretrained("microsoft/deberta-base").to(device)
-tokenizer = DebertaTokenizer.from_pretrained("microsoft/deberta-base")
+# model = LongformerModel.from_pretrained("allenai/longformer-base-4096", cache_dir=cache_dir)
+# tokenizer = LongformerTokenizer.from_pretrained("allenai/longformer-base-4096", cache_dir=cache_dir)
+model = DebertaModel.from_pretrained("microsoft/deberta-base", cache_dir=cache_dir).to(device)
+tokenizer = DebertaTokenizer.from_pretrained("microsoft/deberta-base", cache_dir=cache_dir)
 
 
 def read_mimic_data(read_from_cache=True):
@@ -215,6 +218,8 @@ def mimic_data_reorganize(diagnosis_dict, tokenize_dict, embedding_dict, top_n_d
             diagnosis = diagnosis_dict[identifier]
             if diagnosis not in target_disease_map:
                 continue
+            if (identifier not in embedding_dict) or (identifier not in bag_of_word_dict):
+                continue
             embedding = embedding_dict[identifier]
             bag_of_word = bag_of_word_dict[identifier]
             patient_info_dict[identifier] = [target_disease_map[diagnosis], embedding, bag_of_word]
@@ -287,7 +292,7 @@ def top_disease_select(diagnosis_dict, top_k_disease):
     return target_disease_dict
 
 
-def load_mimic_data(vocab_size, diagnosis_size, read_from_cache):
+def mimic_load_data(vocab_size, diagnosis_size, read_from_cache):
     emr_dict, tokenize_dict, diagnosis_dict, report_dict, embedding_dict = load_mimic_raw_data(read_from_cache)
     shuffled_data, target_disease_map, bag_of_word_dict, token_idx_map, patient_info_dict = \
         mimic_data_reorganize(diagnosis_dict, tokenize_dict, embedding_dict, diagnosis_size, vocab_size,
@@ -296,7 +301,10 @@ def load_mimic_data(vocab_size, diagnosis_size, read_from_cache):
 
 
 def main():
-    load_mimic_data(50, 10000, True)
+    diagnosis_size = args['diagnosis_size']
+    vocab_size_ntm = args['vocab_size_ntm']
+    read_from_cache = args['read_from_cache']
+    mimic_load_data(vocab_size_ntm, diagnosis_size, read_from_cache)
     print('')
 
 
