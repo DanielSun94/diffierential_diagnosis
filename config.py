@@ -4,13 +4,16 @@ import argparse
 import logging
 
 device = 'cuda:0'
+experiment_type = 'hyperparameter'
+repeat_time = 1
+test_set_num = 0
+
 model = 'rntm'
-test_set_num = 4
 vocab_size_lda = 3000
 read_from_cache = True
 topic_number_lda = 10
 vocab_size_ntm = 10000
-topic_number_ntm = 20
+topic_number_ntm = 10
 hidden_size_ntm = 128
 learning_rate = 0.001
 epoch_number = 1000
@@ -23,8 +26,7 @@ classify_model = 'nn'
 process_name = 'entm'
 clip = 0.8
 diagnosis_size = 10
-repeat_time = 5
-experiment_type = 'hyperparameter'
+
 dataset_name = 'hzsph'  # mimic-iii hzsph
 if dataset_name == 'mimic-iii':
     batch_size = 128
@@ -73,6 +75,8 @@ stream_format = logging.Formatter("%(asctime)s %(process)d %(module)s %(lineno)d
 console_logger.setFormatter(stream_format)
 logger.addHandler(console_logger)
 logger.info("|------logger.info-----")
+for key in args:
+    logger.info("{}: {}".format(key, args[key]))
 
 
 cn_CLS_token = '[CLS]'
@@ -149,5 +153,10 @@ hzsph_cache = os.path.join(save_folder, 'hzsph_cache.pkl')
 classify_weight_csv = os.path.join(save_folder, 'model_info_classify_weight_{}_{}.csv')
 topic_word_distribution_csv = os.path.join(save_folder, 'model_info_topic_word_distribution_{}_{}.csv')
 performance_tendency_csv = os.path.join(save_folder, 'performance_tendency_{}_{}.csv')
-representation_pkl = os.path.join(save_folder, 'representation_{}_{}.csv')
+representation_pkl = os.path.join(save_folder, 'representation_{}_{}.pkl')
 perplexity_csv = os.path.join(save_folder, 'perplexity_{}_{}.csv')
+
+# plot cache
+hzsph_tsne_cache = os.path.join(save_folder, 'hzsph_tsne_cache.pkl')
+mimic_tsne_cache = os.path.join(save_folder, 'mimic_tsne_cache.pkl')
+pca_cache = os.path.join(save_folder, 'pca_cache.pkl')

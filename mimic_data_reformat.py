@@ -2,20 +2,14 @@ import csv
 import os
 import pickle
 from itertools import islice
-from transformers import DebertaTokenizer, DebertaModel
-# from transformers import LongformerModel, LongformerTokenizer
+# from transformers import DebertaTokenizer, DebertaModel
+from transformers import LongformerModel, LongformerTokenizer
 import numpy as np
 import torch
 import random
 from config import mimic_iii_note_path, mimic_iii_diagnoses, mimic_iii_cache_0, device, \
     mimic_iii_cache_2, mimic_iii_cache_1, mimic_iii_cache_3, args, cache_dir
 from sklearn.feature_extraction.text import TfidfVectorizer
-
-
-# model = LongformerModel.from_pretrained("allenai/longformer-base-4096", cache_dir=cache_dir)
-# tokenizer = LongformerTokenizer.from_pretrained("allenai/longformer-base-4096", cache_dir=cache_dir)
-model = DebertaModel.from_pretrained("microsoft/deberta-base", cache_dir=cache_dir).to(device)
-tokenizer = DebertaTokenizer.from_pretrained("microsoft/deberta-base", cache_dir=cache_dir)
 
 
 def read_mimic_data(read_from_cache=True):
@@ -133,6 +127,9 @@ def key_info_detect(report_dict, extract_list, key_info_set):
 
 
 def emr_tokenize(emr_dict):
+    tokenizer = LongformerTokenizer.from_pretrained("allenai/longformer-base-4096", cache_dir=cache_dir)
+    # tokenizer = DebertaTokenizer.from_pretrained("microsoft/deberta-base", cache_dir=cache_dir)
+
     content_info_list = [[key, emr_dict[key]] for key in emr_dict]
     content_list = [item[1] for item in content_info_list]
     index_list = [item[0] for item in content_info_list]
@@ -157,6 +154,8 @@ def emr_tokenize(emr_dict):
 
 
 def emr_embedding(tokenize_dict):
+    model = LongformerModel.from_pretrained("allenai/longformer-base-4096", cache_dir=cache_dir).to(device)
+    # model = DebertaModel.from_pretrained("microsoft/deberta-base", cache_dir=cache_dir).to(device)
     content_info_list = [[key, tokenize_dict[key]] for key in tokenize_dict]
     token_list = [item[1] for item in content_info_list]
     index_list = [item[0] for item in content_info_list]

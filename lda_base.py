@@ -33,9 +33,9 @@ def main():
     diagnosis_size = args['diagnosis_size']
     vocab_size_ntm = args['vocab_size_ntm']
     read_from_cache = args['read_from_cache']
-    dataset_name = args['dataset_name']
+    dataset_name = 'hzsph'
     print('dataset name: {}'.format(dataset_name))
-    for topic_num in 20, :
+    for topic_num in 10, :
         for vocab_size in vocab_size_ntm, :
             print('topic number: {}, vocab_number: {}'.format(topic_num, vocab_size))
             train(topic_num, vocab_size, dataset_name, diagnosis_size, read_from_cache)

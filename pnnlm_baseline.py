@@ -19,8 +19,8 @@ def train(data, datatype):
             max_iter=2000
         )
         if datatype == 'raw':
-            mlp_model.fit(train_dataset[1], train_dataset[2])
-            prediction = mlp_model.predict_proba(test_dataset[1])
+            mlp_model.fit(train_dataset[0], train_dataset[2])
+            prediction = mlp_model.predict_proba(test_dataset[0])
             performance = evaluation(prediction, test_dataset[2])
         else:
             mlp_model.fit(train_dataset[1], train_dataset[2])
@@ -37,9 +37,9 @@ def main():
     read_from_cache = args['read_from_cache']
     dataset_name = args['dataset_name']
     dataset_name = 'mimic-iii'
-    read_from_cache = False
+    read_from_cache = True
     datatype = 'raw'
-    print('dataset name: {}'.format(dataset_name))
+    print('dataset name: {}, datatype: {}'.format(dataset_name, datatype))
     five_fold_data, word_index_map = dataset_selection(dataset_name, vocab_size_ntm, diagnosis_size, read_from_cache)
     train(five_fold_data, datatype)
 

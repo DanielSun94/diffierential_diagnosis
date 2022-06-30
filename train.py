@@ -29,7 +29,8 @@ def one_cv_train(batch_size, hidden_size, topic_number, learning_rate, vocab_siz
     performance_list = list()
     tendency_list = list()
 
-    logger.info('topic number: {}, vocab size: {}, epoch number: {}'.format(topic_number, vocab_size, epoch_number))
+    for key in cv_para:
+        logger.info('{}: {}'.format(key, cv_para[key]))
     for i in range(5):
         # print('iter: {}'.format(i))
         test_dataset, train_dataset = five_fold_data[i], []
@@ -84,7 +85,8 @@ def one_cv_train(batch_size, hidden_size, topic_number, learning_rate, vocab_siz
                 continue
             # print('iter {}, accuracy: {}'.format(i, accuracy))
             performance_list.append(performance)
-            logger.info('fold: {}, accuracy: {}'.format(i + 1, performance['accuracy']))
+            for key in performance:
+                logger.info('fold: {}, {}: {}'.format(i + 1, key, performance[key]))
 
             # 输出模型参数，只需要记一个fold的参数即可
             if write_model_flag and i == 0 and dataset_name == 'hzsph':
@@ -96,10 +98,6 @@ def one_cv_train(batch_size, hidden_size, topic_number, learning_rate, vocab_siz
             if write_representation_flag and i == 0:
                 write_representation(model, train_dataset, test_dataset, cv_para)
             break
-
-    for key in performance_list[0]:
-        score_list = [item[key] for item in performance_list]
-        logger.info('average {}: {}'.format(key, np.average(score_list)))
 
 
 def calculate_performance(train_dataset, test_dataset, model, device):

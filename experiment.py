@@ -15,88 +15,87 @@ def main():
     for key in args:
         logger.info('{}: {}'.format(key, args[key]))
 
-    for dataset_name in 'hzsph', 'mimic-iii':
         if experiment_type == 'hyperparameter':
-            logger.info('hyperparameter analysis: {}, {}'.format(dataset_name, topic_number_ntm))
             for _ in range(args['repeat_time']):
                 hyperparameter_analysis(batch_size, hidden_size_ntm, topic_number_ntm, learning_rate, vocab_size_ntm,
-                                        epoch_number, device, tau, model, dataset_name, diagnosis_size, read_from_cache,
-                                        test_set_num)
+                                        epoch_number, device, tau, model, diagnosis_size, read_from_cache, test_set_num)
         else:
-            logger.info('output representation: {}'.format(dataset_name))
             output_representation(batch_size, hidden_size_ntm, topic_number_ntm, learning_rate, vocab_size_ntm,
                                   epoch_number, topic_coefficient, contrastive_coefficient, similarity_coefficient,
-                                  ntm_coefficient, device, tau, model, dataset_name, diagnosis_size, read_from_cache,
-                                  test_set_num)
+                                  ntm_coefficient, device, tau, model, diagnosis_size, read_from_cache, test_set_num)
 
             for topic_number_ntm in 3, 5, 8, 10, 15, 20, 30:
-                logger.info('perplexity analysis: {}, {}'.format(dataset_name, topic_number_ntm))
                 perplexity_analysis(batch_size, hidden_size_ntm, topic_number_ntm, learning_rate, vocab_size_ntm,
                                     epoch_number, topic_coefficient, contrastive_coefficient, similarity_coefficient,
-                                    ntm_coefficient, device, tau, model, dataset_name, diagnosis_size, read_from_cache,
+                                    ntm_coefficient, device, tau, model, diagnosis_size, read_from_cache,
                                     test_set_num)
 
-            logger.info('convergence analysis: {}, {}'.format(dataset_name, topic_number_ntm))
             convergence_analysis(batch_size, hidden_size_ntm, topic_number_ntm, learning_rate, vocab_size_ntm,
-                                 epoch_number, device, tau, model, dataset_name, diagnosis_size, read_from_cache,
-                                 test_set_num)
+                                 epoch_number, device, tau, model, diagnosis_size, read_from_cache, test_set_num)
 
 
 def output_representation(batch_size, hidden_size_ntm, topic_number_ntm, learning_rate, vocab_size_ntm, epoch_number,
                           topic_coefficient, contrastive_coefficient, similarity_coefficient, ntm_coefficient, device,
-                          tau, model, dataset_name, diagnosis_size, read_from_cache, test_set_num):
-    one_cv_train(batch_size, hidden_size_ntm, topic_number_ntm, learning_rate, vocab_size_ntm, epoch_number,
-                 topic_coefficient, contrastive_coefficient, similarity_coefficient, ntm_coefficient, device,
-                 tau, model, dataset_name, diagnosis_size, read_from_cache, False, False, False, True, test_set_num)
+                          tau, model, diagnosis_size, read_from_cache, test_set_num):
+    for dataset_name in 'hzsph', 'mimic-iii':
+        logger.info('output representation: {}'.format(dataset_name))
+        one_cv_train(batch_size, hidden_size_ntm, topic_number_ntm, learning_rate, vocab_size_ntm, epoch_number,
+                     topic_coefficient, contrastive_coefficient, similarity_coefficient, ntm_coefficient, device,
+                     tau, model, dataset_name, diagnosis_size, read_from_cache, False, False, False, True, test_set_num)
 
 
 def perplexity_analysis(batch_size, hidden_size_ntm, topic_number_ntm, learning_rate, vocab_size_ntm, epoch_number,
                         topic_coefficient, contrastive_coefficient, similarity_coefficient, ntm_coefficient, device,
-                        tau, model, dataset_name, diagnosis_size, read_from_cache, test_set_num):
-    one_cv_train(batch_size, hidden_size_ntm, topic_number_ntm, learning_rate, vocab_size_ntm, epoch_number,
-                 topic_coefficient, contrastive_coefficient, similarity_coefficient, ntm_coefficient, device,
-                 tau, model, dataset_name, diagnosis_size, read_from_cache, False, False, True, False, test_set_num)
+                        tau, model, diagnosis_size, read_from_cache, test_set_num):
+    for dataset_name in 'hzsph', 'mimic-iii':
+        logger.info('perplexity analysis: {}, {}'.format(dataset_name, topic_number_ntm))
+        one_cv_train(batch_size, hidden_size_ntm, topic_number_ntm, learning_rate, vocab_size_ntm, epoch_number,
+                     topic_coefficient, contrastive_coefficient, similarity_coefficient, ntm_coefficient, device, tau,
+                     model, dataset_name, diagnosis_size, read_from_cache, False, False, True, False, test_set_num)
 
 
 def convergence_analysis(batch_size, hidden_size_ntm, topic_number_ntm, learning_rate, vocab_size_ntm, epoch_number,
-                         device, tau, model, dataset_name, diagnosis_size, read_from_cache, test_set_num):
+                         device, tau, model, diagnosis_size, read_from_cache, test_set_num):
+    for dataset_name in 'hzsph', 'mimic-iii':
+        logger.info('convergence analysis: {}, {}'.format(dataset_name, topic_number_ntm))
+        contrastive_coefficient, similarity_coefficient, topic_coefficient, ntm_coefficient = 0, 0, 0, 1
+        one_cv_train(batch_size, hidden_size_ntm, topic_number_ntm, learning_rate, vocab_size_ntm, epoch_number,
+                     topic_coefficient, contrastive_coefficient, similarity_coefficient, ntm_coefficient, device,
+                     tau, model, dataset_name, diagnosis_size, read_from_cache, False, True, False, False, test_set_num)
 
-    contrastive_coefficient, similarity_coefficient, topic_coefficient, ntm_coefficient = 0, 0, 0, 1
-    one_cv_train(batch_size, hidden_size_ntm, topic_number_ntm, learning_rate, vocab_size_ntm, epoch_number,
-                 topic_coefficient, contrastive_coefficient, similarity_coefficient, ntm_coefficient, device,
-                 tau, model, dataset_name, diagnosis_size, read_from_cache, False, True, False, False, test_set_num)
+        contrastive_coefficient, similarity_coefficient, topic_coefficient, ntm_coefficient = 0, 0.05, 0, 0.95
+        one_cv_train(batch_size, hidden_size_ntm, topic_number_ntm, learning_rate, vocab_size_ntm, epoch_number,
+                     topic_coefficient, contrastive_coefficient, similarity_coefficient, ntm_coefficient, device,
+                     tau, model, dataset_name, diagnosis_size, read_from_cache, False, True, False, False, test_set_num)
 
-    contrastive_coefficient, similarity_coefficient, topic_coefficient, ntm_coefficient = 0.05, 0, 0, 0.95
-    one_cv_train(batch_size, hidden_size_ntm, topic_number_ntm, learning_rate, vocab_size_ntm, epoch_number,
-                 topic_coefficient, contrastive_coefficient, similarity_coefficient, ntm_coefficient, device,
-                 tau, model, dataset_name, diagnosis_size, read_from_cache, False, True, False, False, test_set_num)
+        contrastive_coefficient, similarity_coefficient, topic_coefficient, ntm_coefficient = 0, 0.1, 0, 0.9
+        one_cv_train(batch_size, hidden_size_ntm, topic_number_ntm, learning_rate, vocab_size_ntm, epoch_number,
+                     topic_coefficient, contrastive_coefficient, similarity_coefficient, ntm_coefficient, device,
+                     tau, model, dataset_name, diagnosis_size, read_from_cache, False, True, False, False, test_set_num)
 
-    contrastive_coefficient, similarity_coefficient, topic_coefficient, ntm_coefficient = 0, 0.05, 0, 0.95
-    one_cv_train(batch_size, hidden_size_ntm, topic_number_ntm, learning_rate, vocab_size_ntm, epoch_number,
-                 topic_coefficient, contrastive_coefficient, similarity_coefficient, ntm_coefficient, device,
-                 tau, model, dataset_name, diagnosis_size, read_from_cache, False, True, False, False, test_set_num)
+        contrastive_coefficient, similarity_coefficient, topic_coefficient, ntm_coefficient = 0, 0.15, 0, 0.85
+        one_cv_train(batch_size, hidden_size_ntm, topic_number_ntm, learning_rate, vocab_size_ntm, epoch_number,
+                     topic_coefficient, contrastive_coefficient, similarity_coefficient, ntm_coefficient, device,
+                     tau, model, dataset_name, diagnosis_size, read_from_cache, False, True, False, False, test_set_num)
 
-    contrastive_coefficient, similarity_coefficient, topic_coefficient, ntm_coefficient = 0, 0, 0.05, 0.95
-    one_cv_train(batch_size, hidden_size_ntm, topic_number_ntm, learning_rate, vocab_size_ntm, epoch_number,
-                 topic_coefficient, contrastive_coefficient, similarity_coefficient, ntm_coefficient, device,
-                 tau, model, dataset_name, diagnosis_size, read_from_cache, False, True, False, False, test_set_num)
-
-    contrastive_coefficient, similarity_coefficient, topic_coefficient, ntm_coefficient = 0.05, 0.05, 0.05, 0.85
-    one_cv_train(batch_size, hidden_size_ntm, topic_number_ntm, learning_rate, vocab_size_ntm, epoch_number,
-                 topic_coefficient, contrastive_coefficient, similarity_coefficient, ntm_coefficient, device,
-                 tau, model, dataset_name, diagnosis_size, read_from_cache, False, True, False, False, test_set_num)
+        contrastive_coefficient, similarity_coefficient, topic_coefficient, ntm_coefficient = 0, 0.2, 0, 0.8
+        one_cv_train(batch_size, hidden_size_ntm, topic_number_ntm, learning_rate, vocab_size_ntm, epoch_number,
+                     topic_coefficient, contrastive_coefficient, similarity_coefficient, ntm_coefficient, device,
+                     tau, model, dataset_name, diagnosis_size, read_from_cache, False, True, False, False, test_set_num)
 
 
 def hyperparameter_analysis(batch_size, hidden_size_ntm, topic_number_ntm, learning_rate, vocab_size_ntm, epoch_number,
-                            device, tau, model, dataset_name, diagnosis_size, read_from_cache, test_set_num):
+                            device, tau, model, diagnosis_size, read_from_cache, test_set_num):
     for similarity_coefficient in 0, 0.05, 0.1, 0.2:
         for topic_coefficient in 0, 0.05, 0.1, 0.2:
-            for contrastive_coefficient in 0, 0.05, 0.1, 0.2:
+            for contrastive_coefficient in 0, 0.05, 0.2:
                 ntm_coefficient = 1 - similarity_coefficient - topic_coefficient - contrastive_coefficient
-                one_cv_train(batch_size, hidden_size_ntm, topic_number_ntm, learning_rate, vocab_size_ntm, epoch_number,
-                             topic_coefficient, contrastive_coefficient, similarity_coefficient, ntm_coefficient,
-                             device, tau, model, dataset_name, diagnosis_size, read_from_cache, False, False, False,
-                             False, test_set_num)
+                for dataset_name in 'mimic-iii', 'hzsph':
+                    logger.info('hyperparameter analysis: {}'.format(dataset_name))
+                    one_cv_train(batch_size, hidden_size_ntm, topic_number_ntm, learning_rate, vocab_size_ntm,
+                                 epoch_number, topic_coefficient, contrastive_coefficient, similarity_coefficient,
+                                 ntm_coefficient, device, tau, model, dataset_name, diagnosis_size, read_from_cache,
+                                 False, False, False, False, test_set_num)
 
 
 if __name__ == '__main__':
