@@ -3,13 +3,13 @@ import re
 import argparse
 import logging
 
-device = 'cuda:0'
+device = 'cuda:4'
 experiment_type = 'hyperparameter'
 repeat_time = 1
-test_set_num = 0
+test_set_num = 4
 
 model = 'rntm'
-vocab_size_lda = 3000
+vocab_size_lda = 10000
 read_from_cache = True
 topic_number_lda = 10
 vocab_size_ntm = 10000
@@ -160,3 +160,6 @@ perplexity_csv = os.path.join(save_folder, 'perplexity_{}_{}.csv')
 hzsph_tsne_cache = os.path.join(save_folder, 'hzsph_tsne_cache.pkl')
 mimic_tsne_cache = os.path.join(save_folder, 'mimic_tsne_cache.pkl')
 pca_cache = os.path.join(save_folder, 'pca_cache.pkl')
+
+model_name_template = os.path.join(save_folder, 'model_{}_cl_{}_kl_{}_dl_{}.pkl')
+lda_save_template = os.path.join(save_folder, 'lda_{}.pkl')

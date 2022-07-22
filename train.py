@@ -12,7 +12,7 @@ import numpy as np
 def one_cv_train(batch_size, hidden_size, topic_number, learning_rate, vocab_size, epoch_number, topic_coefficient,
                  contrastive_coefficient, similarity_coefficient, ntm_coefficient, device, tau, model_name,
                  dataset_name, diagnosis_size, read_from_cache, write_model_flag, write_tendency_flag,
-                 write_perplexity_flag, write_representation_flag, test_set_num):
+                 write_perplexity_flag, write_representation_flag, test_set_num, write_model, write_path):
     cv_para = {
         "batch_size": batch_size, "hidden_size": hidden_size, "topic_number": topic_number, "model_name": model_name,
         "learning_rate": learning_rate, "vocab_size": vocab_size, "epoch_number": epoch_number, "tau": tau,
@@ -97,6 +97,9 @@ def one_cv_train(batch_size, hidden_size, topic_number, learning_rate, vocab_siz
                 write_perplexity(model, test_dataset, cv_para)
             if write_representation_flag and i == 0:
                 write_representation(model, train_dataset, test_dataset, cv_para)
+            if write_model and i == 0:
+                assert write_path is not None
+                torch.save(model.state_dict(), write_path)
             break
 
 
