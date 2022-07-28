@@ -16,7 +16,7 @@ vocab_size_ntm = 10000
 topic_number_ntm = 10
 hidden_size_ntm = 128
 learning_rate = 0.001
-epoch_number = 1000
+epoch_number = 800
 similarity_coefficient = 0
 ntm_coefficient = 1
 topic_coefficient = 0
@@ -25,6 +25,7 @@ tau = 1
 classify_model = 'nn'
 process_name = 'entm'
 clip = 0.8
+cut_length = -1
 diagnosis_size = 10
 
 dataset_name = 'hzsph'  # mimic-iii hzsph
@@ -44,6 +45,7 @@ parser.add_argument("--test_set_num", default=test_set_num, type=float, help="")
 parser.add_argument("--model", default=model, type=str, help="")
 parser.add_argument("--diagnosis_size", default=diagnosis_size, type=float, help="")
 parser.add_argument("--dataset_name", default=dataset_name, type=str, help="")
+parser.add_argument("--cut_length", default=cut_length, type=int, help="")
 parser.add_argument("--classify_model", default=classify_model, type=str, help="")
 parser.add_argument("--vocab_size_lda", default=vocab_size_lda, type=int, help="")
 parser.add_argument("--topic_number_lda", default=topic_number_lda, type=int, help="")
@@ -145,9 +147,9 @@ mimic_iii_diagnoses = os.path.join(mimic_iii_folder, 'DIAGNOSES_ICD.csv')
 mimic_iii_cache_0 = os.path.join(save_folder, 'mimic_iii_cache_0.pkl')
 mimic_iii_cache_1 = os.path.join(save_folder, 'mimic_iii_cache_1.pkl')
 mimic_iii_cache_2 = os.path.join(save_folder, 'mimic_iii_cache_2.pkl')
-mimic_iii_cache_3 = os.path.join(save_folder, 'mimic_iii_cache_3.pkl')
-
-hzsph_cache = os.path.join(save_folder, 'hzsph_cache.pkl')
+mimic_iii_cache_3 = os.path.join(save_folder, 'mimic_iii_cache_3{}.pkl'
+                                 .format('' if cut_length < 0 else '_'+str(cut_length) ))
+hzsph_cache = os.path.join(save_folder, 'hzsph_cache{}.pkl'.format('' if cut_length < 0 else '_'+str(cut_length)))
 
 # result write paths
 classify_weight_csv = os.path.join(save_folder, 'model_info_classify_weight_{}_{}.csv')

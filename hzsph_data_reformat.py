@@ -5,8 +5,8 @@ import torch
 import csv
 import pkuseg
 from config import logger, hzsph_cache, cn_CLS_token, diagnosis_map, device, topic_model_first_emr_parse_list, \
-    topic_model_admission_parse_list, cache_dir, save_folder, \
-    neural_network_first_emr_parse_list, neural_network_admission_parse_list, semi_structure_admission_path, \
+    topic_model_admission_parse_list, cache_dir, args, neural_network_first_emr_parse_list, \
+    neural_network_admission_parse_list, semi_structure_admission_path, \
     emr_parse_file_path, reorganize_first_emr_path, hzsph_data_file_template, integrate_file_name, parse_list, \
     skip_word_set
 import pickle
@@ -14,11 +14,11 @@ from itertools import islice
 from transformers import BertModel, BertTokenizer
 
 
-def hzsph_load_data(read_from_cache, vocab_size_ntm):
+def hzsph_load_data(read_from_cache, vocab_size_ntm, cut_length):
     if read_from_cache and os.path.exists(hzsph_cache):
         five_fold_data, word_index_map = pickle.load(open(hzsph_cache, 'rb'))
     else:
-        word_index_map, reformat_data = hzsph_bag_of_word_reorganize(vocab_size_ntm)
+        word_index_map, reformat_data = hzsph_bag_of_word_reorganize(vocab_size_ntm, cut_length)
         embedding = hzsph_data_embedding()
         index_list = [i for i in range(len(reformat_data))]
         random.shuffle(index_list)
@@ -62,7 +62,7 @@ def hzsph_five_fold_datasets(data, shuffle_index_list):
     return shuffled_data
 
 
-def hzsph_word_index_convert(data, vocab_size):
+def hzsph_word_index_convert(data, vocab_size, cut_length):
     data_list = []
     for key in data:
         data_list.append([key, data[key][0], diagnosis_map[data[key][1]]])
@@ -73,6 +73,11 @@ def hzsph_word_index_convert(data, vocab_size):
     tokenize_data = list()
     for item in content_list:
         tokenize_data.append(model.cut(item))
+
+    if cut_length > 0:
+        for i in range(len(tokenize_data)):
+            tokenize_data[i] = tokenize_data[i][:cut_length]
+
     reformat_data = list()
     for i in range(len(tokenize_data)):
         reformat_data.append([data_list[i][0], tokenize_data[i], data_list[i][2]])
@@ -114,11 +119,11 @@ def hzsph_word_index_convert(data, vocab_size):
     return word_index_map, tokenize_data
 
 
-def hzsph_bag_of_word_reorganize(vocab_size):
+def hzsph_bag_of_word_reorganize(vocab_size, cut_length):
     admission_data_dict, first_emr_record_dict = hzsph_preliminary_load_data(read_from_cache=False)
     data = hzsph_reconstruct_data(admission_data_dict, first_emr_record_dict, topic_model_admission_parse_list,
                                   topic_model_first_emr_parse_list)
-    word_index_map, reformat_data = hzsph_word_index_convert(data, vocab_size)
+    word_index_map, reformat_data = hzsph_word_index_convert(data, vocab_size, cut_length)
     return word_index_map, reformat_data
 
 
@@ -504,17 +509,11 @@ def hzsph_re_save_data(file_path_template, save_, re_save=False):
 
 
 def main():
-    hzsph_re_save_data(hzsph_data_file_template, save_folder, re_save=True)
-    data = hzsph_reorganize_data(integrate_file_name, hzsph_data_file_template)
-    # print('start first emr preprocessing')
-    _ = hzsph_first_emr_record_reorganize(emr_parse_file_path, data, reorganize_first_emr_path)
-    # print('first emr preprocessing, accomplished')
-    # print('start admission emr preprocessing')
-    admission_data_dict = hzsph_admission_record_structurize(data)
-    # print('admission emr preprocessing, accomplished')
-    hzsph_save_admission_data_dict(admission_data_dict, semi_structure_admission_path)
-
-    # reconstruct_data(admission_data_dict, first_emr_record)
+    vocab_size_ntm = args['vocab_size_ntm']
+    read_from_cache = args['read_from_cache']
+    cut_length = args['cut_length']
+    hzsph_load_data(read_from_cache, vocab_size_ntm, cut_length)
+    print('')
 
 
 if __name__ == '__main__':

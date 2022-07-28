@@ -35,7 +35,7 @@ class TopicAwareNTM(Module):
         topic_word_similarity = self.pairwise_similarity(topic_word_distribution, topic_word_distribution)
         multiply_mat = (ones([topic_number, topic_number])-diag(ones([topic_number]))).to(self.device)
         topic_word_similarity = torch.multiply(topic_word_similarity, multiply_mat)
-        output['topic_word_loss'] = -1 * topic_word_similarity
+        output['topic_word_loss'] = topic_word_similarity
         # output['topic_word_loss'] = torch.FloatTensor(0)
 
         # similarity loss
@@ -48,16 +48,12 @@ class TopicAwareNTM(Module):
         # output['similarity_loss'] = torch.FloatTensor(0)
 
         # contrastive loss, info NCE
-        # 不算自身的相似度
         size = doc_topic_similarity.shape[0]
         contrastive_info_mat = torch.multiply(doc_topic_similarity, (ones([size, size]) -
                                                                      diag(ones(size))).to(self.device))
-        contrastive_info_mat = torch.exp(contrastive_info_mat)
-
-        nominator = contrastive_info_mat * same_class_mat
-        nominator = torch.sum(nominator, dim=1)
-        denominator = torch.sum(contrastive_info_mat, dim=1)
-        contrastive_loss = torch.tensor(-1) * torch.log(nominator / denominator)
+        same_class_similarity = contrastive_info_mat * same_class_mat
+        different_class_similarity = contrastive_info_mat * (1-same_class_mat)
+        contrastive_loss = different_class_similarity - same_class_similarity
         contrastive_loss = torch.sum(contrastive_loss)
         output['contrastive_loss'] = contrastive_loss
         # output['contrastive_loss'] = torch.FloatTensor(0)

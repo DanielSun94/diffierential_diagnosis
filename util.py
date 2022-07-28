@@ -31,11 +31,11 @@ def dataset_format(dataset):
         raise ValueError('')
 
 
-def dataset_selection(dataset_name, vocab_size, diagnosis_size, read_from_cache):
+def dataset_selection(dataset_name, vocab_size, diagnosis_size, cut_length, read_from_cache):
     if dataset_name == 'mimic-iii':
-        five_fold_data, word_index_map = mimic_load_data(vocab_size, diagnosis_size, read_from_cache)
+        five_fold_data, word_index_map = mimic_load_data(vocab_size, diagnosis_size, read_from_cache, cut_length)
     elif dataset_name == 'hzsph':
-        five_fold_data, word_index_map = hzsph_load_data(read_from_cache, vocab_size)
+        five_fold_data, word_index_map = hzsph_load_data(read_from_cache, vocab_size, cut_length)
     else:
         raise ValueError('')
     return five_fold_data, word_index_map

@@ -12,7 +12,7 @@ import numpy as np
 def one_cv_train(batch_size, hidden_size, topic_number, learning_rate, vocab_size, epoch_number, topic_coefficient,
                  contrastive_coefficient, similarity_coefficient, ntm_coefficient, device, tau, model_name,
                  dataset_name, diagnosis_size, read_from_cache, write_model_flag, write_tendency_flag,
-                 write_perplexity_flag, write_representation_flag, test_set_num, write_model, write_path):
+                 write_perplexity_flag, write_representation_flag, test_set_num, write_model, write_path, cut_length):
     cv_para = {
         "batch_size": batch_size, "hidden_size": hidden_size, "topic_number": topic_number, "model_name": model_name,
         "learning_rate": learning_rate, "vocab_size": vocab_size, "epoch_number": epoch_number, "tau": tau,
@@ -21,10 +21,11 @@ def one_cv_train(batch_size, hidden_size, topic_number, learning_rate, vocab_siz
         "dataset_name": dataset_name, "diagnosis_size": diagnosis_size,  "read_from_cache": read_from_cache,
         "write_model_flag": write_model_flag,  "write_tendency_flag": write_tendency_flag,
         "write_perplexity_flag": write_perplexity_flag, "write_representation_flag": write_representation_flag,
-        'test_set_num': test_set_num
+        'test_set_num': test_set_num, 'cut_length': cut_length
     }
 
-    five_fold_data, word_index_map = dataset_selection(dataset_name, vocab_size, diagnosis_size, read_from_cache)
+    five_fold_data, word_index_map = dataset_selection(dataset_name, vocab_size, diagnosis_size, read_from_cache,
+                                                       cut_length)
 
     performance_list = list()
     tendency_list = list()
@@ -138,6 +139,8 @@ def main(args_):
     dataset_name = args_['dataset_name']
     repeat_time = args_['repeat_time']
     read_from_cache = args_['read_from_cache']
+    test_set_num = 0
+    cut_length = args_['cut_length']
     write_model_flag, write_tendency_flag, write_perplexity_flag, write_representation_flag = True, True, True, True
     # read_from_cache = False
     for key in args_:
@@ -148,10 +151,10 @@ def main(args_):
     # device = 'cuda:4'
     # for contrastive_coefficient in (0, 0, 0, 0, 0, 0):
     for _ in range(repeat_time):
-        one_cv_train(batch_size, hidden_size_ntm, topic_number_ntm, learning_rate, vocab_size_ntm, epoch_number,
-                     topic_coefficient, contrastive_coefficient, similarity_coefficient, ntm_coefficient, device,
-                     tau, model, dataset_name, diagnosis_size, read_from_cache, write_model_flag, write_tendency_flag,
-                     write_perplexity_flag, write_representation_flag, None)
+        one_cv_train(batch_size, hidden_size_ntm, topic_number_ntm, learning_rate, vocab_size_ntm,
+                     epoch_number, topic_coefficient, contrastive_coefficient, similarity_coefficient,
+                     ntm_coefficient, device, tau, model, dataset_name, diagnosis_size, read_from_cache,
+                     False, False, False, False, test_set_num, False, None, cut_length)
 
 
 if __name__ == '__main__':

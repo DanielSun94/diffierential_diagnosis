@@ -162,16 +162,16 @@ def emr_embedding(tokenize_dict):
 
     representation_list, current_index = list(), 0
     while current_index < len(token_list):
-        if current_index + 16 <= len(token_list):
-            end_index = current_index + 16
+        if current_index + 4 <= len(token_list):
+            end_index = current_index + 4
         else:
             end_index = len(token_list)
         batch = token_list[current_index: end_index]
         for i in range(len(batch)):
-            if len(batch[i]) > 512:
-                batch[i] = batch[i][:512]
+            if len(batch[i]) > 4096:
+                batch[i] = batch[i][:4096]
             else:
-                batch[i] = batch[i] + (512 - len(batch[i])) * [0]
+                batch[i] = batch[i] + (4096 - len(batch[i])) * [0]
 
         representations = model(torch.LongTensor(batch).to(device))['last_hidden_state'].detach().cpu().numpy()[:, 0, :]
         for item in representations:
@@ -205,13 +205,13 @@ def load_mimic_raw_data(read_from_cache):
 
 
 def mimic_data_reorganize(diagnosis_dict, tokenize_dict, embedding_dict, top_n_disease, max_token,
-                          read_from_cache):
+                          read_from_cache, cut_length):
     if read_from_cache and os.path.exists(mimic_iii_cache_3):
         target_disease_map, bag_of_word_dict, token_idx_map, patient_info_dict, shuffled_data = \
             pickle.load(open(mimic_iii_cache_3, 'rb'))
     else:
         target_disease_map = top_disease_select(diagnosis_dict, top_n_disease)
-        bag_of_word_dict, token_idx_map = bag_of_words_generation(tokenize_dict, max_token)
+        bag_of_word_dict, token_idx_map = bag_of_words_generation(tokenize_dict, max_token, cut_length)
         patient_info_dict = dict()
         for identifier in diagnosis_dict:
             diagnosis = diagnosis_dict[identifier]
@@ -250,11 +250,14 @@ def mimic_five_fold_generation(patient_info_dict):
     return shuffled_data
 
 
-def bag_of_words_generation(tokenize_dict, max_feature):
-    vectorizer = TfidfVectorizer(max_features=max_feature)
+def bag_of_words_generation(tokenize_dict, vocab_size, cut_length):
+    vectorizer = TfidfVectorizer(max_features=vocab_size)
     token_id_list = []
     for key in tokenize_dict:
         token_id_str_list = [str(item) for item in tokenize_dict[key]]
+        if cut_length > 0:
+            token_id_str_list = token_id_str_list[:cut_length]
+
         token_id_str = ' '.join(token_id_str_list)
         token_id_list.append(token_id_str)
     vectorizer.fit(token_id_list)
@@ -267,7 +270,7 @@ def bag_of_words_generation(tokenize_dict, max_feature):
     bag_of_word_dict = dict()
     for key in tokenize_dict:
         token_list = tokenize_dict[key]
-        bag_of_word_representation = np.zeros(max_feature)
+        bag_of_word_representation = np.zeros(vocab_size)
         for token in token_list:
             if token in token_idx_map:
                 bag_of_word_representation[token_idx_map[token]] += 1
@@ -291,11 +294,11 @@ def top_disease_select(diagnosis_dict, top_k_disease):
     return target_disease_dict
 
 
-def mimic_load_data(vocab_size, diagnosis_size, read_from_cache):
+def mimic_load_data(vocab_size, diagnosis_size, read_from_cache, cut_length):
     emr_dict, tokenize_dict, diagnosis_dict, report_dict, embedding_dict = load_mimic_raw_data(read_from_cache)
     shuffled_data, target_disease_map, bag_of_word_dict, token_idx_map, patient_info_dict = \
         mimic_data_reorganize(diagnosis_dict, tokenize_dict, embedding_dict, diagnosis_size, vocab_size,
-                              read_from_cache)
+                              read_from_cache, cut_length)
     return shuffled_data, token_idx_map
 
 
@@ -303,7 +306,8 @@ def main():
     diagnosis_size = args['diagnosis_size']
     vocab_size_ntm = args['vocab_size_ntm']
     read_from_cache = args['read_from_cache']
-    mimic_load_data(vocab_size_ntm, diagnosis_size, read_from_cache)
+    cut_length = args['cut_length']
+    mimic_load_data(vocab_size_ntm, diagnosis_size, read_from_cache, cut_length)
     print('')
 
 
