@@ -11,18 +11,15 @@ save_folder = os.path.abspath('./')
 
 
 def read_result():
-    file_name_list = ['hyperparameter_0.log', 'hyperparameter_1.log', 'hyperparameter_2.log', 'hyperparameter_3.log',
-                      'hyperparameter_4.log', 'hyperparameter_append_0.log', 'hyperparameter_append_2.log',
-                      'hyperparameter_append_3.log', 'hyperparameter_append_4.log', 'hyperparameter_append_1_0.1.log',
-                      'hyperparameter_append_1_0.2.log', 'hyperparameter_append_hzsph.log', 'hyperparameter_append_hzsph_2.log']
+    file_name_list = ['experiment_4.log', 'experiment_1.log', 'experiment_2.log', 'experiment_3.log']
     result_dict = dict()
     for key_data in 'hzsph', 'mimic-iii':
         result_dict[key_data] = dict()
-        for kl in 0, 0.05, 0.1, 0.2:
+        for kl in 0, 0.05, 0.1, 0.15:
             result_dict[key_data][kl] = dict()
-            for dl in 0, 0.05, 0.1, 0.2:
+            for dl in 0, 0.05, 0.1, 0.15:
                 result_dict[key_data][kl][dl] = dict()
-                for cl in 0, 0.05, 0.1, 0.2:
+                for cl in 0, 0.05, 0.1, 0.15:
                     result_dict[key_data][kl][dl][cl] = dict()
                     for test_set_num in 0, 1, 2, 3, 4:
                         result_dict[key_data][kl][dl][cl][test_set_num] = {
@@ -45,9 +42,9 @@ def read_result():
                     if not first_flag:
                         for key in current_info:
                             assert current_info[key] != -1 and current_info[key] != ''
-                        assert current_info['cl'] in {0, 0.05, 0.1, 0.2}
-                        assert current_info['kl'] in {0, 0.05, 0.1, 0.2}
-                        assert current_info['dl'] in {0, 0.05, 0.1, 0.2}
+                        assert current_info['cl'] in {0, 0.05, 0.1, 0.15}
+                        assert current_info['kl'] in {0, 0.05, 0.1, 0.15}
+                        assert current_info['dl'] in {0, 0.05, 0.1, 0.15}
                         result_dict[current_info['dataset']][current_info['kl']][current_info['dl']][
                             current_info['cl']][current_info['test_set_num']] = \
                             {'accuracy': current_info['accuracy'], 'macro_precision': current_info['macro_precision'],

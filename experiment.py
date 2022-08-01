@@ -94,7 +94,7 @@ def convergence_analysis(batch_size, hidden_size_ntm, topic_number_ntm, learning
 
 def hyperparameter_analysis(batch_size, hidden_size_ntm, topic_number_ntm, learning_rate, vocab_size_ntm, epoch_number,
                             device, tau, model, diagnosis_size, read_from_cache, test_set_num, cut_length):
-    for similarity_coefficient in 0, 0.05, 0.1, 0.15:
+    for similarity_coefficient in 0.15, :
         for contrastive_coefficient in 0, 0.05, 0.1, 0.15:
             for topic_coefficient in 0, 0.05, 0.1, 0.15:
                 for dataset_name in 'hzsph', 'mimic-iii':

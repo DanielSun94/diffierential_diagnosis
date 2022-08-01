@@ -3,7 +3,7 @@ import re
 import argparse
 import logging
 
-device = 'cuda:4'
+device = 'cuda:7'
 experiment_type = 'hyperparameter'
 repeat_time = 1
 test_set_num = 4
@@ -16,7 +16,7 @@ vocab_size_ntm = 10000
 topic_number_ntm = 10
 hidden_size_ntm = 128
 learning_rate = 0.001
-epoch_number = 800
+epoch_number = 1000
 similarity_coefficient = 0
 ntm_coefficient = 1
 topic_coefficient = 0
