@@ -8,7 +8,7 @@ from config import logger, hzsph_cache, cn_CLS_token, diagnosis_map, device, top
     topic_model_admission_parse_list, cache_dir, args, neural_network_first_emr_parse_list, \
     neural_network_admission_parse_list, semi_structure_admission_path, \
     emr_parse_file_path, reorganize_first_emr_path, hzsph_data_file_template, integrate_file_name, parse_list, \
-    skip_word_set
+    skip_word_set, cn_PAD_token
 import pickle
 from itertools import islice
 from transformers import BertModel, BertTokenizer
@@ -29,9 +29,9 @@ def hzsph_load_data(read_from_cache, vocab_size_ntm, cut_length):
             fold_info = list()
             for item_feature, item_embedding in zip(fold_feature, fold_embedding):
                 assert item_feature[0] == item_embedding[0]
-                key, feature, diagnosis, embedding = \
-                    item_feature[0], item_feature[1], item_feature[2], item_embedding[1]
-                fold_info.append([key, feature, embedding, diagnosis])
+                key, feature, diagnosis, embedding, info_str = \
+                    item_feature[0], item_feature[1], item_feature[2], item_embedding[1], item_embedding[3]
+                fold_info.append([key, feature, embedding, diagnosis, info_str])
             five_fold_data.append(fold_info)
         pickle.dump((five_fold_data, word_index_map), open(hzsph_cache, 'wb'))
     logger.info('data loaded')
@@ -44,8 +44,7 @@ def hzsph_five_fold_datasets(data, shuffle_index_list):
     """
     data_list = []
     for key in data:
-        single_data, diagnosis = data[key][0], data[key][1]
-        data_list.append([key, single_data, diagnosis])
+        data_list.append([key] + list(data[key]))
 
     shuffled_data_list = []
     for index in shuffle_index_list:
@@ -130,7 +129,8 @@ def hzsph_bag_of_word_reorganize(vocab_size, cut_length):
 def hzsph_data_embedding():
     tokenizer = BertTokenizer.from_pretrained('hfl/chinese-macbert-base', cache_dir=cache_dir)
     model = BertModel.from_pretrained('hfl/chinese-macbert-base', cache_dir=cache_dir).to(device)
-
+    padding_token = tokenizer.convert_tokens_to_ids([cn_PAD_token])
+    assert len(padding_token) == 1
     admission_data_dict, first_emr_record_dict = hzsph_preliminary_load_data()
     data = hzsph_reconstruct_data(admission_data_dict, first_emr_record_dict, neural_network_admission_parse_list,
                                   neural_network_first_emr_parse_list)
@@ -140,12 +140,13 @@ def hzsph_data_embedding():
         info_str, diagnosis = data[key]
         token = tokenizer(cn_CLS_token + ' ' + info_str)['input_ids']
         # token_str = tokenizer.tokenize(cn_CLS_token + ' ' + info_str)
-        length_list.append(len(token))
-        if len(token) > 512:
+        length = len(token)
+        length_list.append(length)
+        if length > 512:
             token = token[:512]
             print('{} input id len is larger than 512'.format(key))
         embedding_data[key] = model(torch.LongTensor([token]).to(device))['last_hidden_state'][0][0].\
-            detach().cpu().numpy(), diagnosis_map[diagnosis]
+            detach().cpu().numpy(), diagnosis_map[diagnosis], info_str
 
     print('average len {}'.format(np.average(length_list)))
     print('max len {}'.format(np.max(length_list)))

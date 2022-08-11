@@ -24,8 +24,8 @@ def one_cv_train(batch_size, hidden_size, topic_number, learning_rate, vocab_siz
         'test_set_num': test_set_num, 'cut_length': cut_length
     }
 
-    five_fold_data, word_index_map = dataset_selection(dataset_name, vocab_size, diagnosis_size, read_from_cache,
-                                                       cut_length)
+    five_fold_data, word_index_map = dataset_selection(dataset_name, vocab_size, diagnosis_size,
+                                                       cut_length, read_from_cache)
 
     performance_list = list()
     tendency_list = list()
@@ -57,8 +57,9 @@ def one_cv_train(batch_size, hidden_size, topic_number, learning_rate, vocab_siz
                 #     'cpu').numpy()
                 for epoch in range(epoch_number):
                     epoch_loss = list()
+                    # logger.info('epoch: {}'.format(epoch))
                     for batch_data in train_dataloader:
-                        feature, representation, _, same_class_mat = batch_data
+                        feature, representation, _, _, same_class_mat = batch_data
                         optimizer.zero_grad()
                         output = model(feature, representation, same_class_mat)
 
@@ -68,7 +69,7 @@ def one_cv_train(batch_size, hidden_size, topic_number, learning_rate, vocab_siz
                         topic_word_loss = output['topic_word_loss'].mean()
 
                         loss = ntm_loss * ntm_coefficient + similarity_loss * similarity_coefficient + \
-                               contrastive_loss * contrastive_coefficient + topic_word_loss * topic_coefficient
+                            contrastive_loss * contrastive_coefficient + topic_word_loss * topic_coefficient
                         loss.backward()
                         torch.nn.utils.clip_grad_norm_(model.parameters(), args['clip'])
                         optimizer.step()

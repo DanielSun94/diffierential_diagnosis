@@ -12,21 +12,22 @@ from hzsph_data_reformat import hzsph_load_data
 
 
 def dataset_format(dataset):
-    feature, label, representation = list(), list(), list()
+    feature, label, representation, string = list(), list(), list(), list()
     for item in dataset:
         if len(item) == 3:
             feature.append(item[1])
             label.append(item[2])
-        elif len(item) == 4:
+        elif len(item) == 5:
             feature.append(item[1])
             representation.append(item[2])
             label.append(item[3])
+            string.append(item[4])
         else:
             raise ValueError('')
     if len(dataset[0]) == 3:
         return feature, label
-    elif len(dataset[0]) == 4:
-        return feature, representation, label
+    elif len(dataset[0]) == 5:
+        return feature, representation, label, string
     else:
         raise ValueError('')
 

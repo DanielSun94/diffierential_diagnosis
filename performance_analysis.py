@@ -90,6 +90,10 @@ def read_result():
                     test_set_num = int(line[start_index:].strip())
                     assert test_set_num in {0, 1, 2, 3, 4}
                     current_info['test_set_num'] = test_set_num
+        result_dict[current_info['dataset']][current_info['kl']][current_info['dl']][
+            current_info['cl']][current_info['test_set_num']] = \
+            {'accuracy': current_info['accuracy'], 'macro_precision': current_info['macro_precision'],
+             'macro_recall': current_info['macro_recall'], 'macro_f1': current_info['macro_f1']}
     return result_dict
 
 
@@ -140,7 +144,7 @@ def print_result(result_dict):
 
 
 def plot_result():
-    with open(os.path.join(save_folder, 'predictive_result_merge_plot.csv'), 'r', newline='', encoding='utf-8-sig') as f:
+    with open(os.path.join(save_folder, 'predictive_result_merge.csv'), 'r', newline='', encoding='utf-8-sig') as f:
         csv_reader = csv.reader(f)
         hzsph_kl_list, hzsph_cl_list, hzsph_dl_list, hzsph_value_list = [], [], [], []
         mimic_kl_list, mimic_cl_list, mimic_dl_list, mimic_value_list = [], [], [], []

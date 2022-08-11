@@ -3,7 +3,7 @@ import re
 import argparse
 import logging
 
-device = 'cuda:7'
+device = 'cuda:0'
 experiment_type = 'hyperparameter'
 repeat_time = 1
 test_set_num = 4
@@ -17,10 +17,10 @@ topic_number_ntm = 10
 hidden_size_ntm = 128
 learning_rate = 0.001
 epoch_number = 1000
-similarity_coefficient = 0
+similarity_coefficient = 0.1
 ntm_coefficient = 1
-topic_coefficient = 0
-contrastive_coefficient = 0
+topic_coefficient = 0.1
+contrastive_coefficient = 0.1
 tau = 1
 classify_model = 'nn'
 process_name = 'entm'
@@ -77,11 +77,12 @@ stream_format = logging.Formatter("%(asctime)s %(process)d %(module)s %(lineno)d
 console_logger.setFormatter(stream_format)
 logger.addHandler(console_logger)
 logger.info("|------logger.info-----")
-for key in args:
-    logger.info("{}: {}".format(key, args[key]))
+# for key in args:
+#     logger.info("{}: {}".format(key, args[key]))
 
 
-cn_CLS_token = '[CLS]'
+cn_CLS_token, cn_PAD_token = '[CLS]', '[PAD]'
+
 parse_list = [
     ['姓名', re.compile('\u59d3[\s\*\u0020]*\u540d[\uff1a:\n\t\s]+')],
     ['性别', re.compile('\u6027[\*\s]*\u522b[\uff1a:\n\t\s]+')],

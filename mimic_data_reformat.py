@@ -173,7 +173,9 @@ def emr_embedding(tokenize_dict):
             else:
                 batch[i] = batch[i] + (4096 - len(batch[i])) * [0]
 
-        representations = model(torch.LongTensor(batch).to(device))['last_hidden_state'].detach().cpu().numpy()[:, 0, :]
+        representations = \
+            model(torch.LongTensor(batch).to(device))['last_hidden_state'].detach().cpu().numpy()[:, 0, :], \
+            torch.LongTensor(batch)
         for item in representations:
             representation_list.append(item)
         current_index = end_index
@@ -204,7 +206,7 @@ def load_mimic_raw_data(read_from_cache):
     return emr_dict, tokenize_dict, diagnosis_dict, report_dict, embedding_dict
 
 
-def mimic_data_reorganize(diagnosis_dict, tokenize_dict, embedding_dict, top_n_disease, max_token,
+def mimic_data_reorganize(emr_dict, diagnosis_dict, tokenize_dict, embedding_dict, top_n_disease, max_token,
                           read_from_cache, cut_length):
     if read_from_cache and os.path.exists(mimic_iii_cache_3):
         target_disease_map, bag_of_word_dict, token_idx_map, patient_info_dict, shuffled_data = \
@@ -220,8 +222,9 @@ def mimic_data_reorganize(diagnosis_dict, tokenize_dict, embedding_dict, top_n_d
             if (identifier not in embedding_dict) or (identifier not in bag_of_word_dict):
                 continue
             embedding = embedding_dict[identifier]
+            emr = emr_dict[identifier]
             bag_of_word = bag_of_word_dict[identifier]
-            patient_info_dict[identifier] = [target_disease_map[diagnosis], embedding, bag_of_word]
+            patient_info_dict[identifier] = [target_disease_map[diagnosis], emr, embedding, bag_of_word]
 
         shuffled_data = mimic_five_fold_generation(patient_info_dict)
         pickle.dump((target_disease_map, bag_of_word_dict, token_idx_map, patient_info_dict, shuffled_data),
@@ -235,9 +238,9 @@ def mimic_five_fold_generation(patient_info_dict):
     random.shuffle(index_list)
     shuffled_list = []
     for index in index_list:
-        disease_index, embedding, bag_of_word = patient_info_list[index][0]
-        identifier = patient_info_list[index][0]
-        shuffled_list.append([identifier, bag_of_word, embedding, disease_index])
+        disease_index, emr, embedding, bag_of_word = patient_info_list[index][0]
+        identifier = patient_info_list[index][1]
+        shuffled_list.append([identifier, bag_of_word, embedding, disease_index, emr])
 
     fold_size = len(shuffled_list) // 5
     shuffled_data = [
@@ -297,7 +300,7 @@ def top_disease_select(diagnosis_dict, top_k_disease):
 def mimic_load_data(vocab_size, diagnosis_size, read_from_cache, cut_length):
     emr_dict, tokenize_dict, diagnosis_dict, report_dict, embedding_dict = load_mimic_raw_data(read_from_cache)
     shuffled_data, target_disease_map, bag_of_word_dict, token_idx_map, patient_info_dict = \
-        mimic_data_reorganize(diagnosis_dict, tokenize_dict, embedding_dict, diagnosis_size, vocab_size,
+        mimic_data_reorganize(emr_dict, diagnosis_dict, tokenize_dict, embedding_dict, diagnosis_size, vocab_size,
                               read_from_cache, cut_length)
     return shuffled_data, token_idx_map
 

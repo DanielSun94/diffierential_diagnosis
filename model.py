@@ -75,12 +75,13 @@ class EHRDataset(Dataset):
         self.feature = dataset[0]
         self.representation = dataset[1]
         self.label = dataset[2]
+        self.string = dataset[3]
 
     def __len__(self):
         return len(self.feature)
 
     def __getitem__(self, idx):
-        return self.feature[idx], self.representation[idx], self.label[idx]
+        return self.feature[idx], self.representation[idx], self.label[idx], self.string[idx]
 
 
 def collate_fn(batch):
@@ -98,5 +99,6 @@ def collate_fn(batch):
     same_class_index = torch.IntTensor(same_class_mat)
     feature = torch.FloatTensor(np.array([item[0] for item in batch]))
     representation = torch.FloatTensor(np.array([item[1] for item in batch]))
-    label = torch.FloatTensor(np.array([item[2] for item in batch]))
-    return feature, representation, label, same_class_index
+    label = torch.LongTensor(np.array([item[2] for item in batch]))
+    string = [item[3] for item in batch]
+    return feature, representation, label, string, same_class_index
